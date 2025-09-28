@@ -131,13 +131,13 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
     <div className="backdrop-blur-sm p-4 md:p-6">
       <div className="space-y-6 mb-6">
         <div className="flex gap-2 items-center">
-          <div className="relative flex-1 bg-quinary-100">
+          <div className="relative flex-1">
             <input
               type="text"
               placeholder="Search songs, artists, albums, folders, tags..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-quinary-100 focus:outline-none focus:border-secondary/50 text-sm md:text-base transition-all duration-300 hover:border-secondary/50 backdrop-blur-sm"
+              className="w-full pl-11 pr-4 py-3 bg-foreground-100/20 focus:outline-none focus:border-secondary/50 text-sm md:text-base transition-all duration-300 hover:border-secondary/50 backdrop-blur-sm"
             />
             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8" />

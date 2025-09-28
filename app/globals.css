@@ -43,7 +43,3 @@ header {
     text-wrap: balance;
   }
 }
-
-input {
-  background: var(--color-quinary);
-}
