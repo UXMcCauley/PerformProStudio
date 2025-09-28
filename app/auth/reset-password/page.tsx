@@ -63,8 +63,8 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-200">
-        <div className="bg-base-100 p-8 rounded-box w-full max-w-md mx-4 shadow-xl text-center">
+      <div className="min-h-screen flex items-center justify-center ">
+        <div className="p-8 rounded-box w-full max-w-md mx-4 shadow-xl text-center">
           <div className="mb-6">
             <svg className="w-16 h-16 text-success mx-auto" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -81,8 +81,8 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-base-200">
-      <div className="bg-base-100 p-8 rounded-box w-full max-w-md mx-4 shadow-xl">
+    <div className="min-h-screen flex items-center justify-center ">
+      <div className=" p-8 rounded-box w-full max-w-md mx-4 shadow-xl">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold">Reset Your Password</h2>
           <p className="text-base-content/60 mt-2">Enter your new password below</p>

@@ -1,10 +1,10 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { getUserSettings, upsertUserSettings } from '@/lib/supabase';
 
-type DaisyUITheme =
-  | 'nord'
-  | 'synthwave'
+type DaisyUITheme = 'light' | 'dark';
 
 interface ThemeContextType {
   theme: DaisyUITheme;
@@ -15,42 +15,49 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const availableThemes: DaisyUITheme[] = [
-  'nord',
-  'synthwave',
-];
+const availableThemes: DaisyUITheme[] = ['light', 'dark'];
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<DaisyUITheme>('synthwave');
-  const [effectiveTheme, setEffectiveTheme] = useState<string>('synthwave');
+  const { user } = useAuth();
+  const [theme, setThemeState] = useState<DaisyUITheme>('dark');
+  const [effectiveTheme, setEffectiveTheme] = useState<string>('dark');
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as DaisyUITheme;
-    if (savedTheme && availableThemes.includes(savedTheme)) {
-      setThemeState(savedTheme);
-    }
-  }, []);
+    const loadTheme = async () => {
+      if (user?.id) {
+        const settings = await getUserSettings(user.id);
+        if (settings?.theme) {
+          setThemeState(settings.theme);
+        }
+      } else {
+        const savedTheme = localStorage.getItem('theme') as DaisyUITheme;
+        if (savedTheme && availableThemes.includes(savedTheme)) {
+          setThemeState(savedTheme);
+        }
+      }
+    };
+
+    loadTheme();
+  }, [user?.id]);
 
   useEffect(() => {
-    const updateEffectiveTheme = () => {
-      setEffectiveTheme(theme);
-    };
-
-    updateEffectiveTheme();
-
-    return () => {
-      document.documentElement.setAttribute('data-theme', theme);
-    };
+    setEffectiveTheme(theme);
   }, [theme]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', effectiveTheme);
   }, [effectiveTheme]);
 
-  const setTheme = (newTheme: DaisyUITheme) => {
+  const setTheme = async (newTheme: DaisyUITheme) => {
     setThemeState(newTheme);
-    localStorage.setItem('theme', newTheme);
+
+    if (user?.id) {
+      await upsertUserSettings(user.id, newTheme);
+    } else {
+      localStorage.setItem('theme', newTheme);
+    }
   };
+
   return (
     <ThemeContext.Provider value={{ theme, effectiveTheme, setTheme, availableThemes }}>
       {children}

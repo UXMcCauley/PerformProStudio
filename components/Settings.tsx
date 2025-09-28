@@ -215,22 +215,48 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
               <div>
                 <h3 className="text-lg font-semibold text-base-content mb-4">Appearance</h3>
                 <p className="text-sm text-base-content/60 mb-6">
-                  Choose your dark theme style
+                  Choose how the app looks and feels
                 </p>
 
                 <div className="space-y-3">
                   <button
-                    onClick={() => setTheme('nord')}
+                    onClick={() => setTheme('light')}
                     className={`w-full p-4 border-2 transition-all flex items-center gap-4 ${
-                      theme === 'nord'
+                      theme === 'light'
                         ? 'border-primary bg-base-200'
                         : 'border-base-300 hover:border-primary/50'
                     }`}
                   >
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      theme === 'nord' ? 'border-primary' : 'border-base-300'
+                      theme === 'light' ? 'border-primary' : 'border-base-300'
                     }`}>
-                      {theme === 'nord' && (
+                      {theme === 'light' && (
+                        <div className="w-3 h-3 rounded-full bg-primary" />
+                      )}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                        </svg>
+                        <span className="font-medium text-base-content">Light</span>
+                      </div>
+                      <p className="text-sm text-base-content/60 mt-1">Clean and bright interface</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setTheme('dark')}
+                    className={`w-full p-4 border-2 transition-all flex items-center gap-4 ${
+                      theme === 'dark'
+                        ? 'border-primary bg-base-200'
+                        : 'border-base-300 hover:border-primary/50'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      theme === 'dark' ? 'border-primary' : 'border-base-300'
+                    }`}>
+                      {theme === 'dark' && (
                         <div className="w-3 h-3 rounded-full bg-primary" />
                       )}
                     </div>
@@ -239,35 +265,9 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                         <svg className="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
                         </svg>
-                        <span className="font-medium text-base-content">Nord</span>
+                        <span className="font-medium text-base-content">Dark</span>
                       </div>
-                      <p className="text-sm text-base-content/60 mt-1">Cool arctic-inspired dark theme</p>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => setTheme('synthwave')}
-                    className={`w-full p-4 border-2 transition-all flex items-center gap-4 ${
-                      theme === 'synthwave'
-                        ? 'border-primary bg-base-200'
-                        : 'border-base-300 hover:border-primary/50'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      theme === 'synthwave' ? 'border-primary' : 'border-base-300'
-                    }`}>
-                      {theme === 'synthwave' && (
-                        <div className="w-3 h-3 rounded-full bg-primary" />
-                      )}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5 text-base-content/70" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-                        </svg>
-                        <span className="font-medium text-base-content">Synthwave</span>
-                      </div>
-                      <p className="text-sm text-base-content/60 mt-1">Vibrant retro-futuristic dark theme</p>
+                      <p className="text-sm text-base-content/60 mt-1">Easy on the eyes in low light</p>
                     </div>
                   </button>
                 </div>

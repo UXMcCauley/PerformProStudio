@@ -10,7 +10,7 @@ const config: Config & { daisyui?: any } = {
     require('daisyui'),
   ],
   daisyui: {
-    themes: ['synthwave', 'nord'],
+    themes: ['light', 'dark'],
   },
 }
 

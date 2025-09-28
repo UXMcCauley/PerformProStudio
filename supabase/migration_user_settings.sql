@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS user_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  theme TEXT NOT NULL DEFAULT 'nord' CHECK (theme IN ('nord', 'synthwave')),
+  theme TEXT NOT NULL DEFAULT 'dark' CHECK (theme IN ('light', 'dark')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   UNIQUE(user_id)
