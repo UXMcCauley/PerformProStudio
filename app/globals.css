@@ -2,7 +2,6 @@
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
 /* @import "tailwindcss"; */
- @plugin "daisyui";
 
 /* @layer base {
   :root {
