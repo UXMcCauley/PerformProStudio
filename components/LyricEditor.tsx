@@ -429,10 +429,6 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           <h2 className="text-xl md:text-2xl font-bold text-base-content">
             {song ? 'Edit Song' : 'New Song'}
           </h2>
-          {/* Progress bar placeholder - will be implemented with play functionality */}
-          <div className="mt-1 h-2.5 bg-base-300 overflow-hidden" style={{borderRadius: '4px'}}>
-            <div className="h-full bg-green-500 transition-all duration-300" style={{width: '0%', borderRadius: '4px'}} />
-          </div>
         </div>
         
         {/* Undo/Redo buttons */}
@@ -440,7 +436,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           <button
             onClick={undo}
             disabled={historyIndex <= 0}
-            className={`p-2 transition-all duration-200 ${historyIndex <= 0 ? 'text-base-content/30' : 'text-base-content/70 hover:text-purple-600'}`}
+            className={`p-2 transition-all duration-200 ${historyIndex <= 0 ? 'text-base-content/30' : 'text-base-content/70 hover:text-primary'}`}
             title="Undo (Ctrl+Z)"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -450,7 +446,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           <button
             onClick={redo}
             disabled={historyIndex >= lyricsHistory.length - 1}
-            className={`p-2 transition-all duration-200 ${historyIndex >= lyricsHistory.length - 1 ? 'text-base-content/30' : 'text-base-content/70 hover:text-purple-600'}`}
+            className={`p-2 transition-all duration-200 ${historyIndex >= lyricsHistory.length - 1 ? 'text-base-content/30' : 'text-base-content/70 hover:text-primary'}`}
             title="Redo (Ctrl+Y)"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -554,7 +550,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   className={`px-3 py-1 text-xs font-semibold rounded-lg border transition-all duration-300 ${
                     tags.includes(tag)
                       ? 'bg-purple-100 text-purple-700 border-purple-300 scale-105'
-                      : 'bg-base-200 text-base-content border-base-300 hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200'
+                      : 'bg-base-200 text-base-content border-base-300 hover:text-primary hover:border-primary'
                   }`}
                 >
                   {tags.includes(tag) && '✓ '}{tag}
@@ -569,7 +565,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                     <button
                       type="button"
                       onClick={() => removeTag(tag)}
-                      className="group ml-1 p-0.5 hover:bg-purple-200 rounded transition-colors"
+                      className="group ml-1 p-0.5 rounded transition-colors"
                     >
                       <svg className="w-3 h-3 text-purple-500 group-hover:text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -707,7 +703,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                 onDragStart={(e) => handleDragStart(e, line)}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, line)}
-                className={`flex gap-1 md:gap-2 items-center group p-2 transition-all duration-200 cursor-grab active:cursor-grabbing hover:bg-base-200 ${
+                className={`flex gap-1 md:gap-2 items-center group p-2 transition-all duration-200 cursor-grab active:cursor-grabbing ${
                   draggedLine?.id === line.id ? 'opacity-50' : ''
                 }`}
                 style={{borderRadius: '4px'}}

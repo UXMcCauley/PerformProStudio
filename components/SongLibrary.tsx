@@ -7,9 +7,10 @@ interface Props {
   onSelectSong: (song: Song, lyrics: LyricLine[]) => void;
   onNewSong: () => void;
   onViewMetrics?: (song: Song) => void;
+  onLyricSync?: (song: Song, lyrics: LyricLine[]) => void;
 }
 
-export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: Props) {
+export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, onLyricSync }: Props) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,6 +23,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
   const [showCreateModal, setShowCreateModal] = useState<'song' | 'tag' | 'folder' | 'album' | null>(null);
   const [newItemName, setNewItemName] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
 
   useEffect(() => {
     loadSongs();
@@ -55,6 +57,21 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
     }
 
     onSelectSong(song, data || []);
+  };
+
+  const handleLyricSync = async (song: Song) => {
+    const { data, error } = await supabase
+      .from('lyric_lines')
+      .select('*')
+      .eq('song_id', song.id)
+      .order('line_number', { ascending: true });
+
+    if (error) {
+      console.error('Error loading lyrics:', error);
+      return;
+    }
+
+    onLyricSync?.(song, data || []);
   };
 
   const handleDeleteSong = async (songId: string, e: React.MouseEvent) => {
@@ -217,6 +234,16 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
             </svg>
           </button>
 
+          <button
+            onClick={() => setReorderMode(!reorderMode)}
+            className={`btn btn-ghost btn-square ${reorderMode ? 'text-primary' : 'text-base-content/50'}`}
+            title="Reorder Mode"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+            </svg>
+          </button>
+
           <div className="relative flex-1">
             <input
               type="text"
@@ -233,7 +260,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
 
           <button
             onClick={onNewSong}
-            className="btn btn-ghost btn-square text-primary hover:bg-primary hover:text-primary-content"
+            className="btn btn-ghost btn-square text-primary"
             title="Add Song"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -243,7 +270,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
 
           <button
             onClick={() => setShowCreateModal('album')}
-            className="btn btn-ghost btn-square text-info hover:bg-info hover:text-info-content"
+            className="btn btn-ghost btn-square text-info"
             title="Add Album"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -253,7 +280,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
 
           <button
             onClick={() => setShowCreateModal('folder')}
-            className="btn btn-ghost btn-square text-warning hover:bg-warning hover:text-warning-content"
+            className="btn btn-ghost btn-square text-warning"
             title="Add Folder"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -263,7 +290,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
 
           <button
             onClick={() => setShowCreateModal('tag')}
-            className="btn btn-ghost btn-square text-success hover:bg-success hover:text-success-content"
+            className="btn btn-ghost btn-square text-success"
             title="Add Tag"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -313,50 +340,64 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
                       </span>
                     )}
                     <div className="flex items-center gap-1">
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                        }}
-                        className="btn btn-ghost btn-xs"
-                        title="Move"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          handleSelectSong(song);
-                        }}
-                        className="btn btn-ghost btn-xs text-info"
-                        title="Edit"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={e => {
-                          e.stopPropagation();
-                          onViewMetrics?.(song);
-                        }}
-                        className="btn btn-ghost btn-xs text-success"
-                        title="View Metrics"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={e => handleDeleteSong(song.id, e)}
-                        className="btn btn-ghost btn-xs text-error"
-                        title="Delete"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
+                      {reorderMode ? (
+                        <button
+                          className="btn btn-ghost btn-xs cursor-move"
+                          title="Drag to Reorder"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleSelectSong(song);
+                            }}
+                            className="btn btn-ghost btn-xs text-info"
+                            title="Edit"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleLyricSync(song);
+                            }}
+                            className="btn btn-ghost btn-xs text-secondary"
+                            title="Lyric Sync"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              onViewMetrics?.(song);
+                            }}
+                            className="btn btn-ghost btn-xs text-success"
+                            title="View Metrics"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={e => handleDeleteSong(song.id, e)}
+                            className="btn btn-ghost btn-xs text-error"
+                            title="Delete"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mb-2">

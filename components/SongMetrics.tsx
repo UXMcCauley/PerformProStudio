@@ -227,7 +227,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                     ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white font-bold shadow-lg shadow-green-500/50 scale-110'
                     : isToday
                     ? 'bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-800 font-semibold border-2 border-blue-300'
-                    : 'bg-base-100 text-base-content hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 hover:text-purple-700 hover:scale-105 hover:shadow-md'
+                    : 'bg-base-100 text-base-content hover:text-primary hover:scale-105 hover:shadow-md'
                 }`}
               >
                 {day.getDate()}
@@ -254,7 +254,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
           {showBackButton && onBack && (
             <button
               onClick={onBack}
-              className="p-2 text-base-content/70 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200"
+              className="p-2 text-base-content/70 hover:text-primary transition-all duration-200"
               title="Back"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -338,7 +338,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                   style={{borderRadius: '4px'}}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="p-2 bg-purple-100 text-purple-600 group-hover:bg-purple-200 transition-colors" style={{borderRadius: '4px'}}>
+                    <div className="p-2 bg-purple-100 text-purple-600 transition-colors" style={{borderRadius: '4px'}}>
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
                       </svg>
@@ -404,7 +404,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
         {showBackButton && onBack && (
           <button
             onClick={onBack}
-            className="p-2 text-slate-600 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200"
+            className="p-2 text-base-content/70 hover:text-primary transition-all duration-200"
             title="Back"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -544,7 +544,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                   const percentage = (takes / maxTakes) * 100;
 
                   return (
-                    <div key={line.id} className="group flex flex-col md:flex-row md:items-center gap-2 p-3 bg-base-100 rounded-xl border border-base-300 hover:bg-base-200 hover:shadow-md transition-all duration-300">
+                    <div key={line.id} className="group flex flex-col md:flex-row md:items-center gap-2 p-3 bg-base-100 rounded-xl border border-base-300 hover:shadow-md transition-all duration-300">
                       <div className="flex-1 text-xs md:text-sm text-base-content truncate font-medium">
                         <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs font-semibold mr-2">
                           {line.line_number + 1}
@@ -677,7 +677,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
               {sessions.map(session => (
                 <div
                   key={session.id}
-                  className="group flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 bg-base-100 rounded-xl border border-base-300 hover:bg-base-200 hover:shadow-md transition-all duration-300 hover:scale-[1.02]"
+                  className="group flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 bg-base-100 rounded-xl border border-base-300 hover:shadow-md transition-all duration-300 hover:scale-[1.02]"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full" />

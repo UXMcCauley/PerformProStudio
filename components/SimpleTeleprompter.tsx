@@ -246,12 +246,12 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
     >
       {/* Controls */}
       <div className={`${showControls || !isFullscreen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 ${isFullscreen ? 'absolute top-4 left-4 right-4 z-10' : 'p-4'}`}>
-        <div className="flex items-center justify-between bg-base-100 shadow-md border border-base-300 p-3">
+        <div className="flex items-center justify-between bg-base-100 shadow-md p-3">
           <div className="flex items-center gap-4">
             {showBackButton && onBack && !isFullscreen && (
               <button
                 onClick={onBack}
-                className="p-2 text-base-content/70 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200"
+                className="p-2 text-base-content/70 hover:text-primary transition-colors"
                 title="Back"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -259,20 +259,19 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
                 </svg>
               </button>
             )}
-            <div className="w-1 h-6 bg-purple-600" />
+            <div className="w-1 h-6 bg-primary" />
             <h3 className="text-base-content font-semibold">{song.title} - {song.artist}</h3>
             {sessionId && (
-              <span className="px-2 py-1 bg-red-500 text-white text-sm font-semibold" style={{borderRadius: '4px'}}>
+              <span className="px-2 py-1 bg-error text-error-content text-sm font-semibold" style={{borderRadius: '4px'}}>
                 Recording
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-2">
             <button
               onClick={togglePlayPause}
-              className="p-2 bg-purple-500 hover:bg-purple-600 text-white transition-colors"
-              style={{borderRadius: '4px'}}
+              className="p-2 text-primary hover:text-primary-focus transition-colors"
               title="Space: Play/Pause"
             >
               {isPlaying ? (
@@ -285,23 +284,10 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
                 </svg>
               )}
             </button>
-            
-            <button
-              onClick={recordLineTake}
-              className="p-2 bg-red-500 hover:bg-red-600 text-white transition-colors"
-              style={{borderRadius: '4px'}}
-              title="R: Record Take"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-            </button>
-            
+
             <button
               onClick={toggleFullscreen}
-              className="p-2 bg-purple-500 hover:bg-purple-600 text-white transition-colors"
-              style={{borderRadius: '4px'}}
+              className="p-2 text-base-content/70 hover:text-primary transition-colors"
               title="F: Fullscreen"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -313,9 +299,9 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
 
         {/* Settings */}
         {!isFullscreen && (
-          <div className="mt-4 flex flex-wrap gap-4 bg-black/20 backdrop-blur-sm p-3" style={{borderRadius: '4px'}}>
+          <div className="mt-4 flex flex-wrap gap-4 bg-base-200 p-3" style={{borderRadius: '4px'}}>
             <div className="flex items-center gap-2">
-              <label className="text-white text-sm">Font Size:</label>
+              <label className="text-base-content text-sm">Font Size:</label>
               <input
                 type="range"
                 min="24"
@@ -324,11 +310,11 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
                 onChange={e => setFontSize(Number(e.target.value))}
                 className="w-20"
               />
-              <span className="text-white text-sm w-8">{fontSize}</span>
+              <span className="text-base-content text-sm w-8">{fontSize}</span>
             </div>
-            
+
             <div className="flex items-center gap-2">
-              <label className="text-white text-sm">Speed:</label>
+              <label className="text-base-content text-sm">Speed:</label>
               <input
                 type="range"
                 min="0.5"
@@ -338,14 +324,13 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
                 onChange={e => setScrollSpeed(Number(e.target.value))}
                 className="w-20"
               />
-              <span className="text-white text-sm w-12">{scrollSpeed}x</span>
+              <span className="text-base-content text-sm w-12">{scrollSpeed}x</span>
             </div>
-            
+
             <select
               value={textAlign}
               onChange={e => setTextAlign(e.target.value as any)}
-              className="px-2 py-1 bg-white/20 text-white text-sm border border-white/30"
-              style={{borderRadius: '4px'}}
+              className="select select-bordered select-sm"
             >
               <option value="left">Left</option>
               <option value="center">Center</option>
@@ -377,7 +362,7 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
               <span className="inline-block">
                 {line.text}
                 {lineTakeCounts[line.id] > 0 && (
-                  <span className="ml-2 px-2 py-1 bg-green-500 text-white text-xs font-bold" style={{borderRadius: '4px'}}>
+                  <span className="ml-2 px-2 py-1 bg-success text-success-content text-xs font-bold" style={{borderRadius: '4px'}}>
                     {lineTakeCounts[line.id]}
                   </span>
                 )}
@@ -389,14 +374,14 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
 
       {/* Progress */}
       <div className={`${showControls || !isFullscreen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 ${isFullscreen ? 'absolute bottom-4 left-4 right-4' : 'p-4'}`}>
-        <div className="bg-black/20 backdrop-blur-sm p-3" style={{borderRadius: '4px'}}>
-          <div className="flex items-center justify-between text-white text-sm mb-2">
+        <div className="bg-base-200 p-3" style={{borderRadius: '4px'}}>
+          <div className="flex items-center justify-between text-base-content text-sm mb-2">
             <span>Line {currentLineIndex + 1} of {lyrics.length}</span>
             <span>{Math.round((currentLineIndex / lyrics.length) * 100)}%</span>
           </div>
-          <div className="w-full bg-white/20 h-2" style={{borderRadius: '4px'}}>
-            <div 
-              className="h-full bg-purple-500 transition-all duration-300"
+          <div className="w-full bg-base-300 h-2" style={{borderRadius: '4px'}}>
+            <div
+              className="h-full bg-primary transition-all duration-300"
               style={{
                 width: `${(currentLineIndex / lyrics.length) * 100}%`,
                 borderRadius: '4px'
@@ -408,12 +393,11 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
 
       {/* Keyboard Shortcuts Help */}
       {!isFullscreen && (
-        <div className="p-4 border-t border-white/10">
-          <div className="text-white/60 text-sm grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div><kbd className="px-1 py-0.5 bg-white/20" style={{borderRadius: '2px'}}>Space</kbd> Play/Pause</div>
-            <div><kbd className="px-1 py-0.5 bg-white/20" style={{borderRadius: '2px'}}>↑↓</kbd> Navigate</div>
-            <div><kbd className="px-1 py-0.5 bg-white/20" style={{borderRadius: '2px'}}>F</kbd> Fullscreen</div>
-            <div><kbd className="px-1 py-0.5 bg-white/20" style={{borderRadius: '2px'}}>R</kbd> Record Take</div>
+        <div className="p-4 border-t border-base-300">
+          <div className="text-base-content/60 text-sm grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div><kbd className="px-1 py-0.5 bg-base-200" style={{borderRadius: '2px'}}>Space</kbd> Play/Pause</div>
+            <div><kbd className="px-1 py-0.5 bg-base-200" style={{borderRadius: '2px'}}>↑↓</kbd> Navigate</div>
+            <div><kbd className="px-1 py-0.5 bg-base-200" style={{borderRadius: '2px'}}>F</kbd> Fullscreen</div>
           </div>
         </div>
       )}

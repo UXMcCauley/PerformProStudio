@@ -44,6 +44,13 @@ export default function Home() {
     setActiveTab('metrics');
   };
 
+  const handleLyricSync = (song: Song, songLyrics: LyricLine[]) => {
+    setCurrentSong(song);
+    setLyrics(songLyrics);
+    setPreviousTab(activeTab);
+    setActiveTab('teleprompter');
+  };
+
   return (
     <main className="min-h-screen bg-base-200">
       <Header
@@ -59,6 +66,7 @@ export default function Home() {
               onSelectSong={handleSelectSong}
               onNewSong={handleNewSong}
               onViewMetrics={handleViewMetrics}
+              onLyricSync={handleLyricSync}
             />
           )}
           {activeTab === 'editor' && (

@@ -38,7 +38,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
         {showBackButton && onBack && (
           <button
             onClick={onBack}
-            className="p-2 text-base-content/70 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200"
+            className="p-2 text-base-content/70 hover:text-primary transition-all duration-200"
             title="Back"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -59,7 +59,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
               className={`w-full px-4 py-3 text-left transition-all duration-200 flex items-center gap-3 ${
                 activeSection === 'personal'
                   ? 'bg-purple-50 text-purple-600 border-l-4 border-purple-600'
-                  : 'text-base-content/70 hover:bg-base-200'
+                  : 'text-base-content/70 hover:text-primary'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -73,7 +73,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
               className={`w-full px-4 py-3 text-left transition-all duration-200 flex items-center gap-3 ${
                 activeSection === 'bands'
                   ? 'bg-purple-50 text-purple-600 border-l-4 border-purple-600'
-                  : 'text-slate-700 hover:bg-slate-50'
+                  : 'text-base-content/70 hover:text-primary'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -87,7 +87,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
               className={`w-full px-4 py-3 text-left transition-all duration-200 flex items-center gap-3 ${
                 activeSection === 'theme'
                   ? 'bg-purple-50 text-purple-600 border-l-4 border-purple-600'
-                  : 'text-slate-700 hover:bg-slate-50'
+                  : 'text-base-content/70 hover:text-primary'
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -100,7 +100,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
           <div className="mt-6 pt-6 border-t border-base-300">
             <button
               onClick={handleLogout}
-              className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 transition-all duration-200 flex items-center gap-3"
+              className="w-full px-4 py-3 text-left text-error hover:text-error-focus transition-all duration-200 flex items-center gap-3"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
@@ -138,7 +138,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                   </div>
 
                   <div className="pt-4">
-                    <button className="px-6 py-2 bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-md hover:shadow-lg">
+                    <button className="btn btn-primary">
                       Save Changes
                     </button>
                   </div>
@@ -169,7 +169,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                   {bands.map(band => (
                     <div
                       key={band}
-                      className="flex items-center justify-between p-3 bg-base-200 border border-base-300 hover:bg-base-300 transition-colors"
+                      className="flex items-center justify-between p-3 bg-base-200 border border-base-300 transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -201,7 +201,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                   <button
                     onClick={handleAddBand}
                     disabled={!newBand.trim()}
-                    className="px-6 py-2 bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg"
+                    className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Add Band
                   </button>

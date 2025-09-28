@@ -155,8 +155,8 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                         setTheme(themeName);
                         setShowThemeDropdown(false);
                       }}
-                      className={`w-full px-4 py-2 text-left text-sm transition-colors hover:bg-base-200 flex items-center gap-2 ${
-                        theme === themeName ? 'bg-base-200 font-semibold' : ''
+                      className={`w-full px-4 py-2 text-left text-sm transition-colors hover:text-primary flex items-center gap-2 ${
+                        theme === themeName ? 'text-primary font-semibold' : ''
                       }`}
                     >
                       <div className="w-3 h-3 rounded-full bg-primary"></div>
