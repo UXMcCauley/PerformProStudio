@@ -2,14 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Add these base styles for the theme root */
+:root {
+  --theme-root: "";
+}
+
+.theme-root {
+  --theme-root: "";
+}
+
+
+
+  /* Base styles */
 @layer base {
   :root {
-    /* Enhanced font smoothing for better text rendering */
+    --theme-root: "";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  .theme-root {
+    --theme-root: "";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
 
-  /* Improved focus styles for accessibility */
   :focus-visible {
     outline: 2px solid hsl(var(--primary));
     outline-offset: 2px;
@@ -21,7 +43,6 @@
     text-wrap: balance;
   }
 
-  /* Additional utility classes for daisyUI v5 */
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;

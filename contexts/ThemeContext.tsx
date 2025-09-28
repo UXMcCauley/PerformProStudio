@@ -114,7 +114,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', effectiveTheme);
+    document.documentElement.setAttribute('class', effectiveTheme);
   }, [effectiveTheme]);
 
   const setTheme = (newTheme: DaisyUITheme) => {
