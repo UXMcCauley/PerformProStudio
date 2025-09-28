@@ -52,7 +52,7 @@ export default function Home() {
   };
 
   return (
-    <main className="theme-root">
+    <main>
       <Header
         activeTab={activeTab}
         onTabChange={handleTabChange} 

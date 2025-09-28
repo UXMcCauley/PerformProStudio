@@ -91,15 +91,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (savedTheme && availableThemes.includes(savedTheme)) {
       setThemeState(savedTheme);
     }
-  }, []);
+  }, [availableThemes, setThemeState]);
 
   useEffect(() => {
     const updateEffectiveTheme = () => {
       if (theme === 'auto') {
         const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setEffectiveTheme(isDark ? 'dark' : 'light');
+        setEffectiveTheme(effectiveTheme);
       } else {
-        setEffectiveTheme(theme);
+        setEffectiveTheme(effectiveTheme);
       }
     };
 

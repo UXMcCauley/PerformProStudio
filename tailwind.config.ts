@@ -10,8 +10,7 @@ export default {
   ],
   plugins: [require("daisyui")],
   daisyui: {
-    themeRoot: ".theme-root", 
-    themes: "all"
-
+    themeRoot: ".theme-root",
+    themes: ["nord", "synthwave"]
   }
 } satisfies Config;
