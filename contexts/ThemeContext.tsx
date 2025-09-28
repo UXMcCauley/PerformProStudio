@@ -53,7 +53,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     if (user?.id) {
       try {
-        const result = await upsertUserSettings(user.id, newTheme);
+        const result = await upsertUserSettings(user.id, { theme: newTheme });
         if (!result) {
           console.warn('Failed to save theme to database, falling back to localStorage');
           localStorage.setItem('theme', newTheme);

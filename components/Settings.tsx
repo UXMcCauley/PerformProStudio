@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { upsertUserSettings, getUserSettings, getUserBands, createBand, Band, supabase, getUserTagConfigs, upsertTagConfig, TagConfig } from '@/lib/supabase';
 
 interface Props {
   onBack?: () => void;
@@ -10,21 +12,157 @@ interface Props {
 
 export default function Settings({ onBack, showBackButton = false }: Props) {
   const { theme, setTheme } = useTheme();
-  const [activeSection, setActiveSection] = useState<'personal' | 'bands' | 'theme'>('personal');
+  const { user } = useAuth();
+  const [activeSection, setActiveSection] = useState<'personal' | 'bands' | 'tags' | 'theme'>('personal');
   const [name, setName] = useState('User Name');
   const [email, setEmail] = useState('user@example.com');
-  const [bands, setBands] = useState<string[]>(['My Band']);
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [bands, setBands] = useState<Band[]>([]);
+  const [tagConfigs, setTagConfigs] = useState<TagConfig[]>([]);
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('purple');
   const [newBand, setNewBand] = useState('');
+  const [hasPersonalChanges, setHasPersonalChanges] = useState(false);
+  const [originalPersonalData, setOriginalPersonalData] = useState({ name: 'User Name', email: 'user@example.com', avatar: null as string | null });
 
-  const handleAddBand = () => {
-    if (newBand.trim() && !bands.includes(newBand.trim())) {
-      setBands([...bands, newBand.trim()]);
-      setNewBand('');
+  useEffect(() => {
+    const hasChanges = name !== originalPersonalData.name || email !== originalPersonalData.email || avatar !== originalPersonalData.avatar;
+    setHasPersonalChanges(hasChanges);
+  }, [name, email, avatar, originalPersonalData]);
+
+  const handleAddBand = async () => {
+    if (!user?.id) {
+      alert('Please log in to add bands');
+      return;
+    }
+
+    if (newBand.trim() && !bands.some(b => b.name === newBand.trim())) {
+      const newBandData = await createBand(user.id, newBand.trim());
+      if (newBandData) {
+        setBands([...bands, newBandData]);
+        setNewBand('');
+      } else {
+        alert('Error creating band. Please try again.');
+      }
     }
   };
 
-  const handleRemoveBand = (bandToRemove: string) => {
-    setBands(bands.filter(band => band !== bandToRemove));
+  const handleRemoveBand = async (bandId: string) => {
+    if (!user?.id) {
+      alert('Please log in to remove bands');
+      return;
+    }
+
+    const { error } = await supabase.from('bands').delete().eq('id', bandId);
+    if (!error) {
+      setBands(bands.filter(band => band.id !== bandId));
+    } else {
+      console.error('Error deleting band:', error);
+      alert('Error deleting band. Please try again.');
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+      alert('Please upload a PNG or JPG image');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAvatar(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatar(null);
+  };
+
+  const handleCancelPersonal = () => {
+    setName(originalPersonalData.name);
+    setEmail(originalPersonalData.email);
+    setAvatar(originalPersonalData.avatar);
+  };
+
+  const handleSavePersonal = async () => {
+    if (!user?.id) {
+      alert('Please log in to save settings');
+      return;
+    }
+
+    const result = await upsertUserSettings(user.id, { name, email, avatar });
+    if (result) {
+      setOriginalPersonalData({ name, email, avatar });
+      alert('Settings saved successfully!');
+    } else {
+      alert('Error saving settings. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (user?.id) {
+        const settings = await getUserSettings(user.id);
+        if (settings) {
+          const loadedName = settings.name || user.email || 'User Name';
+          const loadedEmail = settings.email || user.email || 'user@example.com';
+          const loadedAvatar = settings.avatar || null;
+          setName(loadedName);
+          setEmail(loadedEmail);
+          setAvatar(loadedAvatar);
+          setOriginalPersonalData({ name: loadedName, email: loadedEmail, avatar: loadedAvatar });
+        }
+
+        const userBands = await getUserBands(user.id);
+        setBands(userBands);
+
+        const configs = await getUserTagConfigs(user.id);
+        setTagConfigs(configs);
+      }
+    };
+    loadSettings();
+  }, [user]);
+
+  const handleAddTagConfig = async () => {
+    if (!user?.id) {
+      alert('Please log in to add tag configs');
+      return;
+    }
+
+    if (newTagName.trim() && !tagConfigs.some(tc => tc.tag_name === newTagName.trim())) {
+      const config = await upsertTagConfig(user.id, newTagName.trim(), newTagColor);
+      if (config) {
+        setTagConfigs([...tagConfigs, config]);
+        setNewTagName('');
+        setNewTagColor('purple');
+      } else {
+        alert('Error creating tag config. Please try again.');
+      }
+    }
+  };
+
+  const handleRemoveTagConfig = async (tagConfigId: string) => {
+    if (!user?.id) {
+      alert('Please log in to remove tag configs');
+      return;
+    }
+
+    const { error } = await supabase.from('tags_config').delete().eq('id', tagConfigId);
+    if (!error) {
+      setTagConfigs(tagConfigs.filter(tc => tc.id !== tagConfigId));
+    } else {
+      console.error('Error deleting tag config:', error);
+      alert('Error deleting tag config. Please try again.');
+    }
   };
 
   const handleLogout = () => {
@@ -53,61 +191,64 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Sidebar Navigation */}
         <div className="md:col-span-1">
-          <nav className="space-y-1">
-            <button
-              onClick={() => setActiveSection('personal')}
-              className={`w-full px-4 py-3 text-left transition-all duration-200 flex items-center gap-3 ${
-                activeSection === 'personal'
-                  ? 'bg-purple-50 text-purple-600 border-l-4 border-purple-600'
-                  : 'text-base-content/70 hover:text-primary'
-              }`}
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-              <span className="font-medium">Personal Info</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSection('bands')}
-              className={`w-full px-4 py-3 text-left transition-all duration-200 flex items-center gap-3 ${
-                activeSection === 'bands'
-                  ? 'bg-purple-50 text-purple-600 border-l-4 border-purple-600'
-                  : 'text-base-content/70 hover:text-primary'
-              }`}
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-              </svg>
-              <span className="font-medium">Bands</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSection('theme')}
-              className={`w-full px-4 py-3 text-left transition-all duration-200 flex items-center gap-3 ${
-                activeSection === 'theme'
-                  ? 'bg-purple-50 text-purple-600 border-l-4 border-purple-600'
-                  : 'text-base-content/70 hover:text-primary'
-              }`}
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
-              </svg>
-              <span className="font-medium">Theme</span>
-            </button>
-          </nav>
-
-          <div className="mt-6 pt-6 border-t border-base-300">
-            <button
-              onClick={handleLogout}
-              className="w-full px-4 py-3 text-left text-error hover:text-error-focus transition-all duration-200 flex items-center gap-3"
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-              </svg>
-              <span className="font-medium">Logout</span>
-            </button>
-          </div>
+          <ul className="menu bg-base-200 rounded-box">
+            <li>
+              <a
+                onClick={() => setActiveSection('personal')}
+                className={activeSection === 'personal' ? 'active' : ''}
+              >
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+                Personal Info
+              </a>
+            </li>
+            <li>
+              <a
+                onClick={() => setActiveSection('bands')}
+                className={activeSection === 'bands' ? 'active' : ''}
+              >
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                </svg>
+                Bands
+              </a>
+            </li>
+            <li>
+              <a
+                onClick={() => setActiveSection('tags')}
+                className={activeSection === 'tags' ? 'active' : ''}
+              >
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+                </svg>
+                Tags
+              </a>
+            </li>
+            <li>
+              <a
+                onClick={() => setActiveSection('theme')}
+                className={activeSection === 'theme' ? 'active' : ''}
+              >
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+                </svg>
+                Theme
+              </a>
+            </li>
+            <li className="menu-title">
+              <span>Account</span>
+            </li>
+            <li>
+              <a onClick={handleLogout} className="text-error">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                </svg>
+                Logout
+              </a>
+            </li>
+          </ul>
         </div>
 
         {/* Main Content Area */}
@@ -137,8 +278,16 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                     />
                   </div>
 
-                  <div className="pt-4">
-                    <button className="btn btn-primary gap-2">
+                  <div className="pt-4 flex gap-2">
+                    {hasPersonalChanges && (
+                      <button onClick={handleCancelPersonal} className="btn btn-ghost gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Cancel
+                      </button>
+                    )}
+                    <button onClick={handleSavePersonal} disabled={!hasPersonalChanges} className="btn btn-primary gap-2 disabled:opacity-50">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
@@ -150,10 +299,33 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
 
               <div className="pt-6 border-t border-base-300">
                 <h3 className="text-lg font-semibold text-base-content mb-2">Profile Avatar</h3>
-                <p className="text-sm text-base-content/60 mb-4">Your avatar is generated from your initials</p>
+                <p className="text-sm text-base-content/60 mb-4">Upload a custom avatar (PNG/JPG, max 5MB)</p>
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-linear-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                    {name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-3xl shadow-lg overflow-hidden">
+                    {avatar ? (
+                      <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      name.split(' ').map(n => n[0]).join('').toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="btn btn-sm btn-primary">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                      Upload
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/png,image/jpeg,image/jpg"
+                        onChange={handleAvatarUpload}
+                      />
+                    </label>
+                    {avatar && (
+                      <button onClick={handleRemoveAvatar} className="btn btn-sm btn-ghost text-error">
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -169,27 +341,33 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 </p>
 
                 <div className="space-y-3 mb-6">
-                  {bands.map(band => (
-                    <div
-                      key={band}
-                      className="flex items-center justify-between p-3 bg-base-200 border border-base-300 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <svg className="w-7 h-7 text-purple-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                        </svg>
-                        <span className="font-medium text-base-content">{band}</span>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveBand(band)}
-                        className="p-1 text-base-content/50 hover:text-red-600 transition-colors"
-                      >
-                        <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                  {bands.length === 0 ? (
+                    <div className="text-center py-8 text-base-content/60">
+                      <p>No bands yet. Add your first band below!</p>
                     </div>
-                  ))}
+                  ) : (
+                    bands.map(band => (
+                      <div
+                        key={band.id}
+                        className="flex items-center justify-between p-3 bg-base-200 border border-base-300 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <svg className="w-7 h-7 text-purple-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                          </svg>
+                          <span className="font-medium text-base-content">{band.name}</span>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveBand(band.id)}
+                          className="p-1 text-base-content/50 hover:text-red-600 transition-colors"
+                        >
+                          <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 <div className="flex gap-2">
@@ -208,6 +386,88 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                   >
                     Add Band
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'tags' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-base-content mb-4">Tag Colors</h3>
+                <p className="text-sm text-base-content/60 mb-4">
+                  Customize the colors for your tags
+                </p>
+
+                <div className="space-y-3 mb-6">
+                  {tagConfigs.length === 0 ? (
+                    <div className="text-center py-8 text-base-content/60">
+                      <p>No custom tag colors yet. Add one below!</p>
+                    </div>
+                  ) : (
+                    tagConfigs.map(config => (
+                      <div
+                        key={config.id}
+                        className="flex items-center justify-between p-3 bg-base-200 border border-base-300 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-7 h-7 rounded-full bg-${config.color}-500`}></div>
+                          <span className="font-medium text-base-content">{config.tag_name}</span>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveTagConfig(config.id)}
+                          className="p-1 text-base-content/50 hover:text-red-600 transition-colors"
+                        >
+                          <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTagName}
+                      onChange={e => setNewTagName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleAddTagConfig()}
+                      placeholder="Tag name..."
+                      className="flex-1 px-4 py-2 border border-base-300 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                    />
+                    <select
+                      value={newTagColor}
+                      onChange={e => setNewTagColor(e.target.value)}
+                      className="select select-bordered"
+                    >
+                      <option value="red">Red</option>
+                      <option value="orange">Orange</option>
+                      <option value="amber">Amber</option>
+                      <option value="yellow">Yellow</option>
+                      <option value="lime">Lime</option>
+                      <option value="green">Green</option>
+                      <option value="emerald">Emerald</option>
+                      <option value="teal">Teal</option>
+                      <option value="cyan">Cyan</option>
+                      <option value="sky">Sky</option>
+                      <option value="blue">Blue</option>
+                      <option value="indigo">Indigo</option>
+                      <option value="violet">Violet</option>
+                      <option value="purple">Purple</option>
+                      <option value="fuchsia">Fuchsia</option>
+                      <option value="pink">Pink</option>
+                      <option value="rose">Rose</option>
+                    </select>
+                    <button
+                      onClick={handleAddTagConfig}
+                      disabled={!newTagName.trim()}
+                      className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

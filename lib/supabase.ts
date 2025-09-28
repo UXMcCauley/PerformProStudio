@@ -10,6 +10,39 @@ export const getAuthenticatedSupabase = () => {
   return supabase;
 };
 
+export type Band = {
+  id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Album = {
+  id: string;
+  band_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Folder = {
+  id: string;
+  band_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TagConfig = {
+  id: string;
+  user_id: string;
+  tag_name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Song = {
   id: string;
   title: string;
@@ -20,6 +53,10 @@ export type Song = {
   soundcloud_url: string | null;
   instrumental_url: string | null;
   completed: boolean;
+  band_id: string | null;
+  album_id: string | null;
+  folder_id: string | null;
+  user_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -66,6 +103,9 @@ export type UserSettings = {
   id: string;
   user_id: string;
   theme: 'light' | 'dark';
+  name?: string;
+  email?: string;
+  avatar?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -85,48 +125,172 @@ export async function getUserSettings(userId: string): Promise<UserSettings | nu
   return data && data.length > 0 ? data[0] : null;
 }
 
-export async function upsertUserSettings(userId: string, theme: 'light' | 'dark'): Promise<UserSettings | null> {
-  // Debug logging
-  console.log('Upserting user settings:', { userId, theme, themeType: typeof theme });
-  
-  // Ensure theme is exactly 'light' or 'dark' and is a valid string
-  if (typeof theme !== 'string' || !['light', 'dark'].includes(theme)) {
-    console.error('Invalid theme value:', theme);
+export async function upsertUserSettings(
+  userId: string,
+  settings: { theme?: 'light' | 'dark'; name?: string; email?: string; avatar?: string | null }
+): Promise<UserSettings | null> {
+  console.log('Upserting user settings:', { userId, settings });
+
+  // Validate theme if provided
+  if (settings.theme && !['light', 'dark'].includes(settings.theme)) {
+    console.error('Invalid theme value:', settings.theme);
     return null;
   }
-  
-  const validTheme: 'light' | 'dark' = theme;
-  console.log('Validated theme:', validTheme);
-  
+
   // Check if user settings already exist
   const existingSettings = await getUserSettings(userId);
-  
+
+  const updateData: any = { updated_at: new Date().toISOString() };
+  if (settings.theme) updateData.theme = settings.theme;
+  if (settings.name) updateData.name = settings.name;
+  if (settings.email) updateData.email = settings.email;
+  if (settings.avatar !== undefined) updateData.avatar = settings.avatar;
+
   if (existingSettings) {
     // Update existing settings
     const { data, error } = await supabase
       .from('user_settings')
-      .update({ theme: validTheme, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq('user_id', userId)
       .select();
-      
+
     if (error) {
       console.error('Error updating user settings:', error);
       return null;
     }
-    
+
     return data && data.length > 0 ? data[0] : null;
   } else {
     // Insert new settings
     const { data, error } = await supabase
       .from('user_settings')
-      .insert({ user_id: userId, theme: validTheme })
+      .insert({ user_id: userId, ...updateData, theme: settings.theme || 'dark' })
       .select();
-      
+
     if (error) {
       console.error('Error inserting user settings:', error);
       return null;
     }
-    
+
     return data && data.length > 0 ? data[0] : null;
   }
+}
+
+export async function getUserBands(userId: string): Promise<Band[]> {
+  const { data, error } = await supabase
+    .from('bands')
+    .select('*')
+    .eq('user_id', userId)
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching bands:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function createBand(userId: string, name: string): Promise<Band | null> {
+  const { data, error } = await supabase
+    .from('bands')
+    .insert({ user_id: userId, name })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating band:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function getBandAlbums(bandId: string): Promise<Album[]> {
+  const { data, error } = await supabase
+    .from('albums')
+    .select('*')
+    .eq('band_id', bandId)
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching albums:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function createAlbum(bandId: string, name: string): Promise<Album | null> {
+  const { data, error } = await supabase
+    .from('albums')
+    .insert({ band_id: bandId, name })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating album:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function getBandFolders(bandId: string): Promise<Folder[]> {
+  const { data, error } = await supabase
+    .from('folders')
+    .select('*')
+    .eq('band_id', bandId)
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching folders:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function createFolder(bandId: string, name: string): Promise<Folder | null> {
+  const { data, error } = await supabase
+    .from('folders')
+    .insert({ band_id: bandId, name })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating folder:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function getUserTagConfigs(userId: string): Promise<TagConfig[]> {
+  const { data, error } = await supabase
+    .from('tags_config')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error fetching tag configs:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function upsertTagConfig(userId: string, tagName: string, color: string): Promise<TagConfig | null> {
+  const { data, error } = await supabase
+    .from('tags_config')
+    .upsert({ user_id: userId, tag_name: tagName, color }, { onConflict: 'user_id,tag_name' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error upserting tag config:', error);
+    return null;
+  }
+
+  return data;
 }

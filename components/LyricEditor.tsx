@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase, Song, LyricLine } from '@/lib/supabase';
+import { supabase, Song, LyricLine, Band, Album, Folder, getUserBands, getBandAlbums, getBandFolders, createAlbum, createFolder } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Props {
   song: Song | null;
@@ -13,8 +14,9 @@ interface Props {
 }
 
 export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange, onBack, showBackButton = false }: Props) {
+  const { user } = useAuth();
   const [title, setTitle] = useState<string>('');
-  const [artist, setArtist] = useState<string>('');
+  const [selectedBandId, setSelectedBandId] = useState<string>('');  const [availableBands, setAvailableBands] = useState<Band[]>([]);
   const [album, setAlbum] = useState<string>('');
   const [folder, setFolder] = useState<string>('');
   const [completed, setCompleted] = useState<boolean>(false);
@@ -26,8 +28,8 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   const [aiLoading, setAiLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [availableFolders, setAvailableFolders] = useState<string[]>([]);
-  const [availableAlbums, setAvailableAlbums] = useState<string[]>([]);
+  const [availableFolders, setAvailableFolders] = useState<Folder[]>([]);
+  const [availableAlbums, setAvailableAlbums] = useState<Album[]>([]);
   
   // Change tracking
   const [hasChanges, setHasChanges] = useState(false);
@@ -38,39 +40,50 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
   const defaultTags = ['confident', 'needs practice'];
 
-  // Load available folders and albums
+  // Load bands on mount
   useEffect(() => {
-    loadFoldersAndAlbums();
-  }, []);
+    loadBands();
+  }, [user]);
 
-  const loadFoldersAndAlbums = async () => {
-    const { data, error } = await supabase
-      .from('songs')
-      .select('folder, album');
-
-    if (!error && data) {
-      const folders = Array.from(new Set(data.map(song => song.folder).filter(Boolean))) as string[];
-      const albums = Array.from(new Set(data.map(song => song.album).filter(Boolean))) as string[];
-      setAvailableFolders(folders);
-      setAvailableAlbums(albums);
+  const loadBands = async () => {
+    if (user?.id) {
+      const bands = await getUserBands(user.id);
+      setAvailableBands(bands);
     }
+  };
+
+  // Load albums and folders when band changes
+  useEffect(() => {
+    if (selectedBandId) {
+      loadBandData(selectedBandId);
+    } else {
+      setAvailableAlbums([]);
+      setAvailableFolders([]);
+    }
+  }, [selectedBandId]);
+
+  const loadBandData = async (bandId: string) => {
+    const albums = await getBandAlbums(bandId);
+    const folders = await getBandFolders(bandId);
+    setAvailableAlbums(albums);
+    setAvailableFolders(folders);
   };
 
   useEffect(() => {
     if (song) {
       const data = {
         title: song.title || '',
-        artist: song.artist || '',
-        album: song.album || '',
-        folder: song.folder || '',
+        selectedBandId: song.band_id || '',
+        album: song.album_id || '',
+        folder: song.folder_id || '',
         completed: song.completed || false,
         tags: song.tags || [],
         soundcloudUrl: song.soundcloud_url || '',
         instrumentalUrl: song.instrumental_url || ''
       };
-      
+
       setTitle(data.title);
-      setArtist(data.artist);
+      setSelectedBandId(data.selectedBandId);
       setAlbum(data.album);
       setFolder(data.folder);
       setCompleted(data.completed);
@@ -81,7 +94,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     } else {
       const data = {
         title: '',
-        artist: '',
+        selectedBandId: '',
         album: '',
         folder: '',
         completed: false,
@@ -89,9 +102,9 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
         soundcloudUrl: '',
         instrumentalUrl: ''
       };
-      
+
       setTitle(data.title);
-      setArtist(data.artist);
+      setSelectedBandId(data.selectedBandId);
       setAlbum(data.album);
       setFolder(data.folder);
       setCompleted(data.completed);
@@ -114,10 +127,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   // Track changes
   useEffect(() => {
     if (!originalData) return;
-    
+
     const currentData = {
       title,
-      artist,
+      selectedBandId,
       album,
       folder,
       completed,
@@ -125,12 +138,12 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       soundcloudUrl,
       instrumentalUrl
     };
-    
+
     const hasFormChanges = JSON.stringify(currentData) !== JSON.stringify(originalData);
     const hasLyricChanges = rawLyrics !== (lyrics.length > 0 ? lyrics.map(l => l.text).join('\n') : '');
-    
+
     setHasChanges(hasFormChanges || hasLyricChanges);
-  }, [title, artist, album, folder, completed, tags, soundcloudUrl, instrumentalUrl, rawLyrics, originalData, lyrics]);
+  }, [title, selectedBandId, album, folder, completed, tags, soundcloudUrl, instrumentalUrl, rawLyrics, originalData, lyrics]);
 
 
   // Drag and drop functions
@@ -170,22 +183,22 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   // Cancel function
   const handleCancel = () => {
     if (!originalData) return;
-    
+
     setTitle(originalData.title);
-    setArtist(originalData.artist);
+    setSelectedBandId(originalData.selectedBandId);
     setAlbum(originalData.album);
     setFolder(originalData.folder);
     setCompleted(originalData.completed);
     setTags(originalData.tags);
     setSoundcloudUrl(originalData.soundcloudUrl);
     setInstrumentalUrl(originalData.instrumentalUrl);
-    
+
     if (lyrics.length > 0) {
       setRawLyrics(lyrics.map(l => l.text).join('\n'));
     } else {
       setRawLyrics('');
     }
-    
+
     setHasChanges(false);
   };
 
@@ -239,8 +252,13 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   };
 
   const handleSave = async () => {
-    if (!title.trim() || !artist.trim()) {
-      alert('Please enter title and artist');
+    if (!title.trim()) {
+      alert('Please enter a song title');
+      return;
+    }
+
+    if (!selectedBandId) {
+      alert('Please select a band before saving');
       return;
     }
 
@@ -249,18 +267,33 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       return;
     }
 
+    if (!user?.id) {
+      alert('Please log in to save songs');
+      return;
+    }
+
     setSaving(true);
     try {
       let songId = song?.id;
+
+      const selectedBand = availableBands.find(b => b.id === selectedBandId);
+      if (!selectedBand) {
+        alert('Selected band not found');
+        return;
+      }
 
       if (song) {
         const { error } = await supabase
           .from('songs')
           .update({
             title,
-            artist,
+            artist: selectedBand.name,
             album: album || null,
             folder: folder || null,
+            band_id: selectedBandId,
+            album_id: album || null,
+            folder_id: folder || null,
+            user_id: user.id,
             completed,
             tags,
             soundcloud_url: soundcloudUrl || null,
@@ -274,9 +307,13 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           .from('songs')
           .insert({
             title,
-            artist,
+            artist: selectedBand.name,
             album: album || null,
             folder: folder || null,
+            band_id: selectedBandId,
+            album_id: album || null,
+            folder_id: folder || null,
+            user_id: user.id,
             completed,
             tags,
             soundcloud_url: soundcloudUrl || null,
@@ -406,152 +443,177 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-4 md:mb-6">
-        <div>
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            Artist
-          </label>
-          <input
-            type="text"
-            value={artist}
-            onChange={e => setArtist(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
-            placeholder="Artist name"
-          />
-        </div>
-        <div>
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-            </svg>
-            Album
-          </label>
-          <select
-            value={album}
-            onChange={e => setAlbum(e.target.value)}
-            className="select select-bordered w-full"
-          >
-            <option value="">No Album</option>
-            {availableAlbums.map(albumOption => (
-              <option key={albumOption} value={albumOption}>{albumOption}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25H11.69z" />
-            </svg>
-            Folder
-          </label>
-          <select
-            value={folder}
-            onChange={e => setFolder(e.target.value)}
-            className="select select-bordered w-full"
-          >
-            <option value="">No Folder</option>
-            {availableFolders.map(folderOption => (
-              <option key={folderOption} value={folderOption}>{folderOption}</option>
-            ))}
-          </select>
-        </div>
-        <div className="md:col-span-2">
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-            </svg>
-            Tags
-          </label>
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {defaultTags.map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => tags.includes(tag) ? removeTag(tag) : addTag(tag)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg border transition-all duration-300 ${
-                    tags.includes(tag)
-                      ? 'bg-purple-100 text-purple-700 border-purple-300 scale-105'
-                      : 'bg-base-200 text-base-content border-base-300 hover:text-primary hover:border-primary'
-                  }`}
+      {/* Song Details Collapse */}
+      <div className="mb-4 md:mb-6">
+        <div className="collapse collapse-arrow bg-base-200 border border-base-300">
+          <input type="checkbox" defaultChecked />
+          <div className="collapse-title text-md font-semibold">
+            Song Details
+          </div>
+          <div className="collapse-content">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 pt-2">
+              <div>
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                  </svg>
+                  Band
+                </label>
+                <select
+                  value={selectedBandId}
+                  onChange={e => setSelectedBandId(e.target.value)}
+                  className="select select-bordered w-full"
                 >
-                  {tags.includes(tag) && '✓ '}{tag}
-                </button>
-              ))}
-            </div>
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {tags.filter(tag => !defaultTags.includes(tag)).map(tag => (
-                  <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg border border-purple-300">
-                    {tag}
+                  <option value="">Select a band</option>
+                  {availableBands.map(band => (
+                    <option key={band.id} value={band.id}>{band.name}</option>
+                  ))}
+                </select>
+                {availableBands.length === 0 && (
+                  <p className="text-xs text-base-content/60 mt-1">Create a band in Settings first</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                  </svg>
+                  Album
+                </label>
+                <select
+                  value={album}
+                  onChange={e => setAlbum(e.target.value)}
+                  className="select select-bordered w-full"
+                  disabled={!selectedBandId}
+                >
+                  <option value="">No Album</option>
+                  {availableAlbums.map(albumOption => (
+                    <option key={albumOption.id} value={albumOption.id}>{albumOption.name}</option>
+                  ))}
+                </select>
+                {!selectedBandId && (
+                  <p className="text-xs text-base-content/60 mt-1">Select a band first</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25H11.69z" />
+                  </svg>
+                  Folder
+                </label>
+                <select
+                  value={folder}
+                  onChange={e => setFolder(e.target.value)}
+                  className="select select-bordered w-full"
+                  disabled={!selectedBandId}
+                >
+                  <option value="">No Folder</option>
+                  {availableFolders.map(folderOption => (
+                    <option key={folderOption.id} value={folderOption.id}>{folderOption.name}</option>
+                  ))}
+                </select>
+                {!selectedBandId && (
+                  <p className="text-xs text-base-content/60 mt-1">Select a band first</p>
+                )}
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+                  </svg>
+                  Tags
+                </label>
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {defaultTags.map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => tags.includes(tag) ? removeTag(tag) : addTag(tag)}
+                        className={`px-3 py-1 text-xs font-semibold rounded-lg border transition-all duration-300 ${
+                          tags.includes(tag)
+                            ? 'bg-purple-100 text-purple-700 border-purple-300 scale-105'
+                            : 'bg-base-200 text-base-content border-base-300 hover:text-primary hover:border-primary'
+                        }`}
+                      >
+                        {tags.includes(tag) && '✓ '}{tag}
+                      </button>
+                    ))}
+                  </div>
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {tags.filter(tag => !defaultTags.includes(tag)).map(tag => (
+                        <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg border border-purple-300">
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => removeTag(tag)}
+                            className="group ml-1 p-0.5 rounded-sm transition-colors"
+                          >
+                            <svg className="w-3 h-3 text-purple-500 group-hover:text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTag}
+                      onChange={e => setNewTag(e.target.value)}
+                      onKeyDown={handleNewTagKeyPress}
+                      placeholder="Add custom tag..."
+                      className="flex-1 px-3 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all duration-300"
+                    />
                     <button
                       type="button"
-                      onClick={() => removeTag(tag)}
-                      className="group ml-1 p-0.5 rounded-sm transition-colors"
+                      onClick={() => addTag(newTag)}
+                      disabled={!newTag.trim() || tags.includes(newTag.trim())}
+                      className="group px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                     >
-                      <svg className="w-3 h-3 text-purple-500 group-hover:text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      <svg className="w-5 h-5 text-base-content/50 group-hover:text-purple-400 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                       </svg>
                     </button>
-                  </span>
-                ))}
+                  </div>
+                </div>
               </div>
-            )}
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newTag}
-                onChange={e => setNewTag(e.target.value)}
-                onKeyDown={handleNewTagKeyPress}
-                placeholder="Add custom tag..."
-                className="flex-1 px-3 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all duration-300"
-              />
-              <button
-                type="button"
-                onClick={() => addTag(newTag)}
-                disabled={!newTag.trim() || tags.includes(newTag.trim())}
-                className="group px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-              >
-                <svg className="w-5 h-5 text-base-content/50 group-hover:text-purple-400 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
+              <div>
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  SoundCloud Reference URL
+                </label>
+                <input
+                  type="text"
+                  value={soundcloudUrl}
+                  onChange={e => setSoundcloudUrl(e.target.value)}
+                  className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
+                  placeholder="https://soundcloud.com/..."
+                />
+              </div>
+              <div>
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
+                  Instrumental URL
+                </label>
+                <input
+                  type="text"
+                  value={instrumentalUrl}
+                  onChange={e => setInstrumentalUrl(e.target.value)}
+                  className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
+                  placeholder="https://soundcloud.com/..."
+                />
+              </div>
             </div>
           </div>
-        </div>
-        <div>
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-            SoundCloud Reference URL
-          </label>
-          <input
-            type="text"
-            value={soundcloudUrl}
-            onChange={e => setSoundcloudUrl(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
-            placeholder="https://soundcloud.com/..."
-          />
-        </div>
-        <div>
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
-            Instrumental URL
-          </label>
-          <input
-            type="text"
-            value={instrumentalUrl}
-            onChange={e => setInstrumentalUrl(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
-            placeholder="https://soundcloud.com/..."
-          />
         </div>
       </div>
 
@@ -620,7 +682,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
               </svg>
             </button>
           </div>
-          <div className="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
+          <div className="space-y-2">
             {lyrics.map((line, index) => (
               <div
                 key={line.id}
