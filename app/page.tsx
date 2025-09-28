@@ -52,7 +52,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen">
+    <main className="theme-root">
       <Header
         activeTab={activeTab}
         onTabChange={handleTabChange} 

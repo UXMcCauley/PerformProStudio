@@ -83,8 +83,8 @@ const availableThemes: DaisyUITheme[] = [
 ];
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<DaisyUITheme>('light');
-  const [effectiveTheme, setEffectiveTheme] = useState<string>('light');
+  const [theme, setThemeState] = useState<DaisyUITheme>('dark');
+  const [effectiveTheme, setEffectiveTheme] = useState<string>('dark');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as DaisyUITheme;
