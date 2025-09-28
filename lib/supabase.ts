@@ -65,7 +65,7 @@ export type TimeSpentSegment = {
 export type UserSettings = {
   id: string;
   user_id: string;
-  theme: 'nord' | 'synthwave';
+  theme: 'light' | 'dark';
   created_at: string;
   updated_at: string;
 };
@@ -85,7 +85,7 @@ export async function getUserSettings(userId: string): Promise<UserSettings | nu
   return data;
 }
 
-export async function upsertUserSettings(userId: string, theme: 'nord' | 'synthwave'): Promise<UserSettings | null> {
+export async function upsertUserSettings(userId: string, theme: 'light' | 'dark'): Promise<UserSettings | null> {
   const { data, error } = await supabase
     .from('user_settings')
     .upsert(
