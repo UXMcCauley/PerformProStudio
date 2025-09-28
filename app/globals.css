@@ -1,14 +1,12 @@
 @import "tailwindcss";
-
 @plugin "daisyui" {
-    themes: synthwave, nord;
+    themes: dark, light;
 }
 
 :root {
 
-    
     /* synthwave */
-    [data-theme="synthwave"] {
+    [data-theme="dark"] {
         --color-base-100: oklch(21.8216% 0.081948 287.835609);
         --color-base-200: oklch(20.2941% 0.076211 287.835609);
         --color-base-300: oklch(18.7665% 0.070475 287.835609);
@@ -47,7 +45,7 @@
         --noise: 0;
     }
 
-    [data-theme="nord"] {
+    [data-theme="light"] {
         --color-base-100: oklch(95.1276% 0.007445 260.731539);
         --color-base-200: oklch(93.2996% 0.010389 261.788485);
         --color-base-300: oklch(89.9258% 0.016374 262.749256);

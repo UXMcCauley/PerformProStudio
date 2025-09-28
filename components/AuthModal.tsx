@@ -80,7 +80,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-100">
+    <div className="fixed inset-0 bg-base-200 bg-opacity-50 flex items-center justify-center z-100">
       <div className="bg-base-100 p-8 rounded-box w-full max-w-md mx-4 shadow-xl">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold">
