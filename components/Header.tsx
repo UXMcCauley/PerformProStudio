@@ -23,18 +23,21 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   return (
-    <header className={`fixed top-0 left-0 right-0 z-50 shadow-md ${'bg-secondary'}`}>
-      <div className="container mx-auto px-4 py-4">
+    <header className={`fixed top-0 left-0 right-0 z-50 shadow-md backdrop-blur-sm`}>
+      <div className={`container mx-auto px-4 py-4`}>
         <div className="flex items-center justify-between">
-          <svg className="w-10 h-10 text-white " fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <svg className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
           </svg>
+
+          <div className="flex items-center gap-6">
+
             <nav className="flex items-center gap-4">
               <button
                 onClick={() => onTabChange('library')}
                 className={`flex flex-col items-center gap-1 px-3 py-2 transition-all duration-200 ${activeTab === 'library'
-                    ? 'text-purple-600'
-                    : 'text-slate-600 hover:text-purple-600'
+                    ? 'text-tertiary'
+                    : 'text-base-content/10 hover:text-base-content/70'
                   }`}
                 title="Library"
               >
@@ -55,8 +58,8 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
               <button
                 onClick={() => onTabChange('editor')}
                 className={`flex flex-col items-center gap-1 px-3 py-2 transition-all duration-200 ${activeTab === 'editor'
-                    ? 'text-purple-600'
-                    : 'text-slate-600 hover:text-purple-600'
+                    ? 'text-tertiary'
+                    : 'text-base-content/50 hover:text-base-content/70'
                   }`}
                 title="Editor"
               >
@@ -78,10 +81,10 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                 onClick={() => onTabChange('teleprompter')}
                 disabled={lyricsCount === 0}
                 className={`flex flex-col items-center gap-1 px-3 py-2 transition-all duration-200 disabled:cursor-not-allowed ${lyricsCount === 0
-                    ? 'text-slate-400 opacity-50'
+                    ? 'text-base-content/50 opacity-50'
                     : activeTab === 'teleprompter'
-                      ? 'text-purple-600'
-                      : 'text-slate-600'
+                      ? 'text-tertiary'
+                      : 'text-base-content/50 hover:text-base-content/70'
                   }`}
                 title="Teleprompter"
               >
@@ -102,8 +105,8 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
               <button
                 onClick={() => onTabChange('metrics')}
                 className={`flex flex-col items-center gap-1 px-3 py-2 transition-all duration-200 ${activeTab === 'metrics'
-                    ? 'text-purple-600'
-                    : 'text-slate-600'
+                    ? 'text-tertiary'
+                    : 'text-base-content/40 hover:text-base-content/50'
                   }`}
                 title="Metrics"
               >
@@ -155,7 +158,7 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                     Settings
                   </button>
 
-                  <div className="border-t border-slate-200 mt-2 pt-2">
+                  <div className="border-t border-base-content/20 mt-2 pt-2">
                     <button
                       onClick={() => {
                         // Handle logout
@@ -174,6 +177,7 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
             </div>
           </div>
         </div>
+      </div>
     </header>
   );
 }

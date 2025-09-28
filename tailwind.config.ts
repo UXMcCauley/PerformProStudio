@@ -16,8 +16,8 @@ export default {
   },
   plugins: [require("daisyui")],
   daisyui: {
-    themes: ["light", "dark"],
-    darkTheme: "dark",
+    themes: ["synthwave", "nord"],
+    darkTheme: "synthwave",
     base: true,
     styled: true,
     utils: true,
