@@ -237,7 +237,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
         </div>
         <div className="mt-4 p-3 bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl">
           <p className="text-xs md:text-sm text-blue-800 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Click a day to mark as completed practice session
@@ -257,7 +257,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
               className="p-2 text-base-content/70 hover:text-primary transition-all duration-200"
               title="Back"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
             </button>
@@ -287,7 +287,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                 className="w-full pl-12 pr-4 py-3 bg-base-100 border border-base-300 text-base-content focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                 style={{borderRadius: '4px'}}
               />
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-7 h-7 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <circle cx="11" cy="11" r="8" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
               </svg>
@@ -339,7 +339,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                 >
                   <div className="flex items-start gap-3">
                     <div className="p-2 bg-purple-100 text-purple-600 transition-colors" style={{borderRadius: '4px'}}>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
                       </svg>
                     </div>
@@ -367,7 +367,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                       </div>
                     </div>
                     <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <svg className="w-7 h-7 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
@@ -407,7 +407,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
             className="p-2 text-base-content/70 hover:text-primary transition-all duration-200"
             title="Back"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
@@ -422,7 +422,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
         <div className="group bg-linear-to-br from-emerald-50 to-green-50 border border-emerald-200/50 rounded-2xl p-4 md:p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/20 hover:-translate-y-1">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-1 h-8 bg-linear-to-b from-emerald-500 to-green-500 rounded-full" />
-            <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
@@ -434,7 +434,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
         <div className="group bg-linear-to-br from-purple-50 to-pink-50 border border-purple-200/50 rounded-2xl p-4 md:p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20 hover:-translate-y-1">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-1 h-8 bg-linear-to-b from-purple-500 to-pink-500 rounded-full" />
-            <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
@@ -446,7 +446,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
         <div className="group bg-linear-to-br from-blue-50 to-indigo-50 border border-blue-200/50 rounded-2xl p-4 md:p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/20 hover:-translate-y-1">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-1 h-8 bg-linear-to-b from-blue-500 to-indigo-500 rounded-full" />
-            <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
           </div>
@@ -456,7 +456,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
         <div className="group bg-linear-to-br from-green-50 to-emerald-50 border border-green-200/50 rounded-2xl p-4 md:p-6 transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-green-500/20 hover:-translate-y-1">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-1 h-8 bg-linear-to-b from-green-500 to-emerald-500 rounded-full" />
-            <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
           </div>

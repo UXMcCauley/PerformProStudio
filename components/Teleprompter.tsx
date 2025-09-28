@@ -303,7 +303,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                 className="group relative p-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 title={isPlaying ? 'Stop' : 'Play'}
               >
-                <svg className={`w-5 h-5 md:w-6 md:h-6 transition-all duration-300 ${
+                <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-300 ${
                   !widget ? 'text-slate-700' : 'text-slate-400 group-hover:text-green-500 group-hover:scale-110'
                 }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   {isPlaying ? (
@@ -320,7 +320,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                 className="group p-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 title="Reset"
               >
-                <svg className={`w-5 h-5 md:w-6 md:h-6 transition-all duration-500 ${
+                <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-500 ${
                   !widget ? 'text-slate-700' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110 group-hover:rotate-180'
                 }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -332,7 +332,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                 className="group p-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 title={syncMode ? 'Exit Sync Mode' : 'Sync Mode'}
               >
-                <svg className={`w-5 h-5 md:w-6 md:h-6 transition-all duration-300 ${
+                <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-300 ${
                   !widget ? 'text-slate-700' :
                   syncMode ? 'text-red-500 scale-110' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110'
                 }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -345,7 +345,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                 className="group p-3 transition-all duration-300"
                 title="Fullscreen"
               >
-                <svg className="w-5 h-5 md:w-6 md:h-6 text-slate-400 group-hover:text-blue-500 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-7 h-7 md:w-6 md:h-6 text-slate-400 group-hover:text-blue-500 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                 </svg>
               </button>
@@ -360,7 +360,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                   className="group p-2 rounded-lg transition-all duration-300"
                   title="Align Left"
                 >
-                  <svg className={`w-4 h-4 transition-all duration-300 ${
+                  <svg className={`w-5 h-5 transition-all duration-300 ${
                     textAlign === 'left' ? 'text-purple-400 scale-110' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110'
                   }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
@@ -373,7 +373,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                   className="group p-2 rounded-lg transition-all duration-300"
                   title="Align Center"
                 >
-                  <svg className={`w-4 h-4 transition-all duration-300 ${
+                  <svg className={`w-5 h-5 transition-all duration-300 ${
                     textAlign === 'center' ? 'text-purple-400 scale-110' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110'
                   }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
@@ -386,7 +386,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                   className="group p-2 rounded-lg transition-all duration-300"
                   title="Align Right"
                 >
-                  <svg className={`w-4 h-4 transition-all duration-300 ${
+                  <svg className={`w-5 h-5 transition-all duration-300 ${
                     textAlign === 'right' ? 'text-purple-400 scale-110' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110'
                   }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <line x1="3" y1="6" x2="21" y2="6" strokeLinecap="round" />
@@ -401,12 +401,12 @@ export default function Teleprompter({ song, lyrics }: Props) {
                   type="checkbox"
                   checked={autoScale}
                   onChange={e => setAutoScale(e.target.checked)}
-                  className="w-4 h-4 accent-purple-600 cursor-pointer transition-transform hover:scale-110"
+                  className="w-5 h-5 accent-purple-600 cursor-pointer transition-transform hover:scale-110"
                 />
               </label>
               {!autoScale && (
                 <label className="flex items-center gap-2 bg-white/60 rounded-lg px-3 py-1 border border-slate-200">
-                  <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                   </svg>
                   <input
@@ -420,7 +420,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
                 </label>
               )}
               <label className="flex items-center gap-2 bg-white/60 rounded-lg px-3 py-1 border border-slate-200">
-                <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
                 <input
@@ -441,7 +441,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
               className="fixed top-6 right-6 p-4 bg-white/10 backdrop-blur-md hover:bg-white/20 text-white rounded-2xl z-50 transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:shadow-white/20 active:scale-95 border border-white/20"
               title="Exit Fullscreen"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>

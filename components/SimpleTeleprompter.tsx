@@ -254,7 +254,7 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
                 className="p-2 text-base-content/70 hover:text-primary transition-colors"
                 title="Back"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
@@ -275,11 +275,11 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
               title="Space: Play/Pause"
             >
               {isPlaying ? (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
                 </svg>
               ) : (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z"/>
                 </svg>
               )}
@@ -290,7 +290,7 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
               className="p-2 text-base-content/70 hover:text-primary transition-colors"
               title="F: Fullscreen"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/>
               </svg>
             </button>
