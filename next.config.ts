@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     webVitalsAttribution: ['CLS', 'LCP']
   },
 
+
+  
 };
 
 export default nextConfig;

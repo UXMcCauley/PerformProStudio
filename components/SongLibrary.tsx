@@ -155,9 +155,9 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
 
   return (
     <div className="p-4 md:p-6">
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-">
         {showFilters && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 bg-base-900">
             <select
               value={filterByCompleted}
               onChange={e => setFilterByCompleted(e.target.value as any)}
@@ -302,12 +302,12 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-12 gap-4">
+        <div className="w-full h-full flex flex-col justify-center items-center">
           <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
           <p className="text-base-content/60 text-sm md:text-base animate-pulse">Loading songs...</p>
         </div>
       ) : filteredSongs.length === 0 ? (
-        <div className="text-center py-12">
+        <div className="p-4 gap-4 flex flex-col justify-between h-full w-full card card-bordered border-secondary opacity-70 hover:opacity-100 transition-opacity duration-300">
           <svg className="w-20 h-20 mx-auto mb-4 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
           </svg>
@@ -316,16 +316,16 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
           </p>
         </div>
       ) : (
-        <div className="grid gap-3 md:gap-4">
+        <div className="w-full h-full flex flex-col justify-center items-center p-4">
           {filteredSongs.map(song => (
             <div
               key={song.id}
               onClick={() => handleSelectSong(song)}
               onMouseEnter={() => setHoveredSong(song.id)}
               onMouseLeave={() => setHoveredSong(null)}
-              className="card card-bordered bg-base-100 cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-300 p-4"
+              className="p-4 gap-4 flex flex-col justify-between h-full w-full card card-bordered border-secondary opacity-70 hover:opacity-100 transition-opacity duration-300"
             >
-              <div className="flex justify-between items-start gap-3">
+              <div className="cursor-pointer">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <svg className="w-5 h-5 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -350,7 +350,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
                           </svg>
                         </button>
                       ) : (
-                        <>
+                        <div className="flex items-center gap-1">
                           <button
                             onClick={e => {
                               e.stopPropagation();
@@ -396,11 +396,11 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 bg-base-900">
                     <svg className="w-4 h-4 text-base-content/50 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                     </svg>
@@ -419,7 +419,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
                       {song.tags && song.tags.length > 0 && (
                         <div className="flex gap-1 flex-wrap">
                           {song.tags.map(tag => (
-                            <span key={tag} className="px-2 py-1 bg-purple-100 text-purple-700 border border-purple-200 text-xs whitespace-nowrap" style={{borderRadius: '4px'}}>
+                            <span key={tag} className="tag tag-outline tag-lg tag-primary">
                               {tag}
                             </span>
                           ))}
