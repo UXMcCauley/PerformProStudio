@@ -242,7 +242,7 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
   return (
     <div
       ref={containerRef}
-      className={`relative ${isFullscreen ? 'h-screen bg-black' : 'min-h-96 bg-base-100 shadow-lg border border-base-300'} flex flex-col`}
+      className={`relative flex flex-col`}
     >
       {/* Controls */}
       <div className={`${showControls || !isFullscreen ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300 ${isFullscreen ? 'absolute top-4 left-4 right-4 z-10' : 'p-4'}`}>

@@ -21,6 +21,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
   const [sortBy, setSortBy] = useState<'updated_at' | 'title' | 'artist' | 'album'>('updated_at');
   const [showCreateModal, setShowCreateModal] = useState<'song' | 'tag' | 'folder' | 'album' | null>(null);
   const [newItemName, setNewItemName] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     loadSongs();
@@ -117,20 +118,105 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
 
   const handleCreateItem = async () => {
     if (!newItemName.trim()) return;
-    
+
     if (showCreateModal === 'song') {
       onNewSong();
     }
-    // Add logic for creating tags, folders, albums in the future
-    
+
     setShowCreateModal(null);
     setNewItemName('');
   };
 
+  const hasActiveFilters = filterByCompleted !== 'all' || filterByFolder !== 'all' || filterByTag !== 'all' || filterByAlbum !== 'all';
+
+  const clearFilters = () => {
+    setFilterByCompleted('all');
+    setFilterByFolder('all');
+    setFilterByTag('all');
+    setFilterByAlbum('all');
+  };
+
   return (
     <div className="p-4 md:p-6">
-      <div className="space-y-6 mb-6">
+      <div className="space-y-3 mb-6">
+        {showFilters && (
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={filterByCompleted}
+              onChange={e => setFilterByCompleted(e.target.value as any)}
+              className="select select-bordered select-sm flex-1 min-w-[140px]"
+            >
+              <option value="all">All Songs</option>
+              <option value="completed">Completed</option>
+              <option value="incomplete">In Progress</option>
+            </select>
+
+            <select
+              value={filterByFolder}
+              onChange={e => setFilterByFolder(e.target.value)}
+              className="select select-bordered select-sm flex-1 min-w-[140px]"
+            >
+              <option value="all">All Folders</option>
+              {folders.map(folder => (
+                <option key={folder} value={folder}>{folder}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterByAlbum}
+              onChange={e => setFilterByAlbum(e.target.value)}
+              className="select select-bordered select-sm flex-1 min-w-[140px]"
+            >
+              <option value="all">All Albums</option>
+              {albums.map(album => (
+                <option key={album} value={album}>{album}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterByTag}
+              onChange={e => setFilterByTag(e.target.value)}
+              className="select select-bordered select-sm flex-1 min-w-[140px]"
+            >
+              <option value="all">All Tags</option>
+              {allTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+              className="select select-bordered select-sm flex-1 min-w-[140px]"
+            >
+              <option value="updated_at">Sort by Updated</option>
+              <option value="title">Sort by Title</option>
+              <option value="artist">Sort by Artist</option>
+              <option value="album">Sort by Album</option>
+            </select>
+
+            <button
+              onClick={clearFilters}
+              disabled={!hasActiveFilters}
+              className="btn btn-sm btn-ghost disabled:opacity-50"
+              title="Clear Filters"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`btn btn-ghost btn-square ${showFilters || hasActiveFilters ? 'text-primary' : 'text-base-content/50'}`}
+            title="Toggle Filters"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
+            </svg>
+          </button>
+
           <div className="relative flex-1">
             <input
               type="text"
@@ -144,8 +230,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
             </svg>
           </div>
-          
-          {/* Icon-only buttons */}
+
           <button
             onClick={onNewSong}
             className="btn btn-ghost btn-square text-primary hover:bg-primary hover:text-primary-content"
@@ -155,7 +240,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
             </svg>
           </button>
-          
+
           <button
             onClick={() => setShowCreateModal('album')}
             className="btn btn-ghost btn-square text-info hover:bg-info hover:text-info-content"
@@ -165,7 +250,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
             </svg>
           </button>
-          
+
           <button
             onClick={() => setShowCreateModal('folder')}
             className="btn btn-ghost btn-square text-warning hover:bg-warning hover:text-warning-content"
@@ -175,7 +260,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
             </svg>
           </button>
-          
+
           <button
             onClick={() => setShowCreateModal('tag')}
             className="btn btn-ghost btn-square text-success hover:bg-success hover:text-success-content"
@@ -186,62 +271,6 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
             </svg>
           </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <select
-            value={filterByCompleted}
-            onChange={e => setFilterByCompleted(e.target.value as any)}
-            className="select select-bordered select-sm"
-          >
-            <option value="all">All Songs</option>
-            <option value="completed">Completed</option>
-            <option value="incomplete">In Progress</option>
-          </select>
-
-          <select
-            value={filterByFolder}
-            onChange={e => setFilterByFolder(e.target.value)}
-            className="select select-bordered select-sm"
-          >
-            <option value="all">All Folders</option>
-            {folders.map(folder => (
-              <option key={folder} value={folder}>{folder}</option>
-            ))}
-          </select>
-
-          <select
-            value={filterByAlbum}
-            onChange={e => setFilterByAlbum(e.target.value)}
-            className="select select-bordered select-sm"
-          >
-            <option value="all">All Albums</option>
-            {albums.map(album => (
-              <option key={album} value={album}>{album}</option>
-            ))}
-          </select>
-
-          <select
-            value={filterByTag}
-            onChange={e => setFilterByTag(e.target.value)}
-            className="select select-bordered select-sm"
-          >
-            <option value="all">All Tags</option>
-            {allTags.map(tag => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
-
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as any)}
-            className="select select-bordered select-sm"
-          >
-            <option value="updated_at">Sort by Updated</option>
-            <option value="title">Sort by Title</option>
-            <option value="artist">Sort by Artist</option>
-            <option value="album">Sort by Album</option>
-          </select>
         </div>
       </div>
 

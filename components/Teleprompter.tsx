@@ -155,9 +155,9 @@ export default function Teleprompter({ song, lyrics }: Props) {
 
   const updateCurrentLine = (pos: number) => {
     let newIndex = -1;
-
     for (let i = 0; i < lyrics.length; i++) {
-      if (lyrics[i].timestamp_ms !== null && pos >= lyrics[i].timestamp_ms) {
+      const timestamp = lyrics[i].timestamp_ms;
+      if (timestamp !== null && pos >= timestamp) {
         newIndex = i;
       } else {
         break;
