@@ -8,9 +8,4 @@ export default {
     "./contexts/**/*.{js,ts,jsx,tsx,mdx}"
     
   ],
-  plugins: [require("daisyui")],
-  daisyui: {
-    themeRoot: ".theme-root",
-    themes: ["nord", "synthwave"]
-  }
 } satisfies Config;

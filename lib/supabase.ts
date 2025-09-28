@@ -61,3 +61,44 @@ export type TimeSpentSegment = {
   duration_seconds: number;
   created_at: string;
 };
+
+export type UserSettings = {
+  id: string;
+  user_id: string;
+  theme: 'nord' | 'synthwave';
+  created_at: string;
+  updated_at: string;
+};
+
+export async function getUserSettings(userId: string): Promise<UserSettings | null> {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching user settings:', error);
+    return null;
+  }
+
+  return data;
+}
+
+export async function upsertUserSettings(userId: string, theme: 'nord' | 'synthwave'): Promise<UserSettings | null> {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .upsert(
+      { user_id: userId, theme },
+      { onConflict: 'user_id' }
+    )
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error upserting user settings:', error);
+    return null;
+  }
+
+  return data;
+}

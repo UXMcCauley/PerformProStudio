@@ -1,129 +1,55 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { getUserSettings, upsertUserSettings } from '@/lib/supabase';
 
-type DaisyUITheme =
-  | 'light'
-  | 'dark'
-  | 'cupcake'
-  | 'bumblebee'
-  | 'emerald'
-  | 'corporate'
-  | 'synthwave'
-  | 'retro'
-  | 'cyberpunk'
-  | 'valentine'
-  | 'halloween'
-  | 'garden'
-  | 'forest'
-  | 'aqua'
-  | 'lofi'
-  | 'pastel'
-  | 'fantasy'
-  | 'wireframe'
-  | 'black'
-  | 'luxury'
-  | 'dracula'
-  | 'cmyk'
-  | 'autumn'
-  | 'business'
-  | 'acid'
-  | 'lemonade'
-  | 'night'
-  | 'coffee'
-  | 'winter'
-  | 'dim'
-  | 'nord'
-  | 'sunset'
-  | 'auto';
+type DaisyUITheme = 'nord' | 'synthwave';
 
 interface ThemeContextType {
   theme: DaisyUITheme;
-  effectiveTheme: string;
   setTheme: (theme: DaisyUITheme) => void;
   availableThemes: DaisyUITheme[];
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const availableThemes: DaisyUITheme[] = [
-  'light',
-  'dark',
-  'cupcake',
-  'bumblebee',
-  'emerald',
-  'corporate',
-  'synthwave',
-  'retro',
-  'cyberpunk',
-  'valentine',
-  'halloween',
-  'garden',
-  'forest',
-  'aqua',
-  'lofi',
-  'pastel',
-  'fantasy',
-  'wireframe',
-  'black',
-  'luxury',
-  'dracula',
-  'cmyk',
-  'autumn',
-  'business',
-  'acid',
-  'lemonade',
-  'night',
-  'coffee',
-  'winter',
-  'dim',
-  'nord',
-  'sunset',
-  'auto'
-];
+const availableThemes: DaisyUITheme[] = ['nord', 'synthwave'];
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<DaisyUITheme>('dark');
-  const [effectiveTheme, setEffectiveTheme] = useState<string>('dark');
+  const { user } = useAuth();
+  const [theme, setThemeState] = useState<DaisyUITheme>('nord');
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as DaisyUITheme;
-    if (savedTheme && availableThemes.includes(savedTheme)) {
-      setThemeState(savedTheme);
-    }
-  }, [availableThemes, setThemeState]);
-
-  useEffect(() => {
-    const updateEffectiveTheme = () => {
-      if (theme === 'auto') {
-        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setEffectiveTheme(effectiveTheme);
+    const loadTheme = async () => {
+      if (user?.id) {
+        const settings = await getUserSettings(user.id);
+        if (settings?.theme) {
+          setThemeState(settings.theme);
+        }
       } else {
-        setEffectiveTheme(effectiveTheme);
+        const savedTheme = localStorage.getItem('theme') as DaisyUITheme;
+        if (savedTheme && availableThemes.includes(savedTheme)) {
+          setThemeState(savedTheme);
+        }
       }
     };
 
-    updateEffectiveTheme();
+    loadTheme();
+  }, [user?.id]);
 
-    if (theme === 'auto') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = () => updateEffectiveTheme();
-      mediaQuery.addEventListener('change', handler);
-      return () => mediaQuery.removeEventListener('change', handler);
-    }
-  }, [theme]);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('class', effectiveTheme);
-  }, [effectiveTheme]);
-
-  const setTheme = (newTheme: DaisyUITheme) => {
+  const setTheme = async (newTheme: DaisyUITheme) => {
     setThemeState(newTheme);
-    localStorage.setItem('theme', newTheme);
+
+    if (user?.id) {
+      await upsertUserSettings(user.id, newTheme);
+    } else {
+      localStorage.setItem('theme', newTheme);
+    }
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, effectiveTheme, setTheme, availableThemes }}>
+    <ThemeContext.Provider value={{ theme, setTheme, availableThemes }}>
       {children}
     </ThemeContext.Provider>
   );
