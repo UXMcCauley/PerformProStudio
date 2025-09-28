@@ -25,37 +25,36 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   const [rawLyrics, setRawLyrics] = useState<string>('');
   const [aiLoading, setAiLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [availableFolders, setAvailableFolders] = useState<string[]>([]);
+  const [availableAlbums, setAvailableAlbums] = useState<string[]>([]);
   
   // Change tracking
   const [hasChanges, setHasChanges] = useState(false);
   const [originalData, setOriginalData] = useState<any>(null);
-  
-  // Undo history for lyrics
-  const [lyricsHistory, setLyricsHistory] = useState<LyricLine[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
   
   // Drag and drop state
   const [draggedLine, setDraggedLine] = useState<LyricLine | null>(null);
 
   const defaultTags = ['confident', 'needs practice'];
 
-  // Keyboard shortcuts
+  // Load available folders and albums
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'z' && !e.shiftKey) {
-          e.preventDefault();
-          undo();
-        } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
-          e.preventDefault();
-          redo();
-        }
-      }
-    };
+    loadFoldersAndAlbums();
+  }, []);
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [historyIndex, lyricsHistory]);
+  const loadFoldersAndAlbums = async () => {
+    const { data, error } = await supabase
+      .from('songs')
+      .select('folder, album');
+
+    if (!error && data) {
+      const folders = Array.from(new Set(data.map(song => song.folder).filter(Boolean))) as string[];
+      const albums = Array.from(new Set(data.map(song => song.album).filter(Boolean))) as string[];
+      setAvailableFolders(folders);
+      setAvailableAlbums(albums);
+    }
+  };
 
   useEffect(() => {
     if (song) {
@@ -138,40 +137,6 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     setHasChanges(hasFormChanges || hasLyricChanges);
   }, [title, artist, album, folder, completed, tags, soundcloudUrl, instrumentalUrl, rawLyrics, originalData, lyrics]);
 
-  // Undo/Redo functions
-  const addToHistory = (newLyrics: LyricLine[]) => {
-    const newHistory = lyricsHistory.slice(0, historyIndex + 1);
-    newHistory.push(newLyrics);
-    
-    // Keep only last 10 entries
-    if (newHistory.length > 10) {
-      newHistory.shift();
-    } else {
-      setHistoryIndex(historyIndex + 1);
-    }
-    
-    setLyricsHistory(newHistory);
-  };
-
-  const undo = () => {
-    if (historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      setHistoryIndex(newIndex);
-      const previousLyrics = lyricsHistory[newIndex];
-      onLyricsChange(previousLyrics);
-      setRawLyrics(previousLyrics.map(l => l.text).join('\n'));
-    }
-  };
-
-  const redo = () => {
-    if (historyIndex < lyricsHistory.length - 1) {
-      const newIndex = historyIndex + 1;
-      setHistoryIndex(newIndex);
-      const nextLyrics = lyricsHistory[newIndex];
-      onLyricsChange(nextLyrics);
-      setRawLyrics(nextLyrics.map(l => l.text).join('\n'));
-    }
-  };
 
   // Drag and drop functions
   const handleDragStart = (e: React.DragEvent, line: LyricLine) => {
@@ -202,7 +167,6 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       line_number: index
     }));
 
-    addToHistory(lyrics); // Save current state to history
     onLyricsChange(updatedLyrics);
     setRawLyrics(updatedLyrics.map(l => l.text).join('\n'));
     setDraggedLine(null);
@@ -238,10 +202,6 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
     setAiLoading(true);
     try {
-      // Save current state to history before AI formatting
-      if (lyrics.length > 0) {
-        addToHistory(lyrics);
-      }
       
       const response = await fetch('/api/format-lyrics', {
         method: 'POST',
@@ -264,10 +224,6 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   };
 
   const handleBreakIntoLines = () => {
-    // Save current state to history before breaking into lines
-    if (lyrics.length > 0) {
-      addToHistory(lyrics);
-    }
     
     const lines = rawLyrics
       .split('\n')
@@ -426,33 +382,32 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
         )}
         <div className="w-1 h-8 bg-purple-600" />
         <div className="flex-1">
-          <h2 className="text-xl md:text-2xl font-bold text-base-content">
-            {song ? 'Edit Song' : 'New Song'}
-          </h2>
-        </div>
-        
-        {/* Undo/Redo buttons */}
-        <div className="flex gap-1">
-          <button
-            onClick={undo}
-            disabled={historyIndex <= 0}
-            className={`p-2 transition-all duration-200 ${historyIndex <= 0 ? 'text-base-content/30' : 'text-base-content/70 hover:text-primary'}`}
-            title="Undo (Ctrl+Z)"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-            </svg>
-          </button>
-          <button
-            onClick={redo}
-            disabled={historyIndex >= lyricsHistory.length - 1}
-            className={`p-2 transition-all duration-200 ${historyIndex >= lyricsHistory.length - 1 ? 'text-base-content/30' : 'text-base-content/70 hover:text-primary'}`}
-            title="Redo (Ctrl+Y)"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
-            </svg>
-          </button>
+          {editingTitle ? (
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onBlur={() => setEditingTitle(false)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') setEditingTitle(false);
+                if (e.key === 'Escape') {
+                  setTitle(song?.title || '');
+                  setEditingTitle(false);
+                }
+              }}
+              className="text-xl md:text-2xl font-bold text-base-content bg-transparent border-b-2 border-primary focus:outline-none w-full"
+              placeholder="Song title"
+              autoFocus
+            />
+          ) : (
+            <h2
+              onClick={() => setEditingTitle(true)}
+              className="text-xl md:text-2xl font-bold text-base-content cursor-pointer hover:text-primary transition-colors"
+              title="Click to edit"
+            >
+              {title || 'New Song'}
+            </h2>
+          )}
         </div>
       </div>
 
@@ -471,21 +426,6 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             </svg>
             Mark as Completed
           </label>
-        </div>
-        <div>
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
-            Title
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
-            placeholder="Song title"
-          />
         </div>
         <div>
           <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
@@ -509,13 +449,16 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             </svg>
             Album
           </label>
-          <input
-            type="text"
+          <select
             value={album}
             onChange={e => setAlbum(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
-            placeholder="Album name (optional)"
-          />
+            className="select select-bordered w-full"
+          >
+            <option value="">No Album</option>
+            {availableAlbums.map(albumOption => (
+              <option key={albumOption} value={albumOption}>{albumOption}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
@@ -524,13 +467,16 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             </svg>
             Folder
           </label>
-          <input
-            type="text"
+          <select
             value={folder}
             onChange={e => setFolder(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
-            placeholder="Folder/category (optional)"
-          />
+            className="select select-bordered w-full"
+          >
+            <option value="">No Folder</option>
+            {availableFolders.map(folderOption => (
+              <option key={folderOption} value={folderOption}>{folderOption}</option>
+            ))}
+          </select>
         </div>
         <div className="md:col-span-2">
           <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
@@ -684,7 +630,6 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             </label>
             <button
               onClick={() => {
-                addToHistory(lyrics);
                 onLyricsChange([]);
               }}
               className="p-1 text-base-content/50 hover:text-red-600 transition-all duration-200"

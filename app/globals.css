@@ -1,8 +1,10 @@
 @import 'tailwindcss/base';
 @import 'tailwindcss/components';
 @import 'tailwindcss/utilities';
+/* @import "tailwindcss"; */
+ @plugin "daisyui";
 
-@layer base {
+/* @layer base {
   :root {
     :root {
       --background: #f3f3f3;
@@ -31,19 +33,18 @@
     }
 
   }
-}
+} */
 
 
 
-body {
-  /* color: var(--foreground); */
+/* body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
 
 header {
   background: linear-gradient(to right, var(--color-tertiary), var(--color-secondary));
-}
+} */
 
 @layer utilities {
   .text-balance {
