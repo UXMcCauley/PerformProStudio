@@ -1,10 +1,17 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
 
 :root {
   --background: #f3f3f3;
   --foreground: #000000;
+  --color-primary: #000000;
+  --color-secondary: #1100ff;
+  --color-tertiary: #af00f5;
+  --color-quaternary: #edededf0;
+  --color-quinary: hsl(0, 0%, 9%);
+  --color-senary: #f3f3f3;
+  --color-septenary: #ededed;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -14,8 +21,8 @@
     --color-primary: #000000;
     --color-secondary: #1100ff;
     --color-tertiary: #af00f5;
-    --color-quaternary: #ededed;
-    --color-quinary: hsl(0, 0%, 9%);
+    --color-quaternary: #862c2c;
+    --color-quinary: hsl(0, 0%, 100%);
     --color-senary: #f3f3f3;
     --color-septenary: #ededed;
   }
@@ -35,4 +42,8 @@ header {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+input {
+  background: var(--color-quinary);
 }

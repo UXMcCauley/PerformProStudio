@@ -131,14 +131,13 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
     <div className="backdrop-blur-sm p-4 md:p-6">
       <div className="space-y-6 mb-6">
         <div className="flex gap-2 items-center">
-          <div className="relative flex-1">
+          <div className="relative flex-1 bg-quinary-100">
             <input
               type="text"
               placeholder="Search songs, artists, albums, folders, tags..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 border-2 border-base-300 focus:outline-none focus:border-purple-500 text-sm md:text-base transition-all duration-300 hover:border-purple-300 bg-base-100 backdrop-blur-sm"
-              style={{borderRadius: '4px'}}
+              className="w-full pl-11 pr-4 py-3 bg-quinary-100 focus:outline-none focus:border-secondary/50 text-sm md:text-base transition-all duration-300 hover:border-secondary/50 backdrop-blur-sm"
             />
             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8" />
@@ -149,8 +148,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           {/* Icon-only buttons */}
           <button
             onClick={onNewSong}
-            className="p-3 text-base-content/50 hover:text-purple-500 hover:bg-purple-50 transition-all duration-200 border-2 border-base-300 hover:border-purple-300"
-            style={{borderRadius: '4px'}}
+            className="p-3 text-base-content/50 hover:text-purple-500 transition-all duration-200 "
             title="Add Song"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -160,7 +158,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           
           <button
             onClick={() => setShowCreateModal('album')}
-            className="p-3 text-base-content/50 hover:text-blue-500 hover:bg-blue-50 transition-all duration-200 border-2 border-base-300 hover:border-blue-300"
+            className="p-3 text-base-content/50 hover:text-blue-500  transition-all duration-200"
             style={{borderRadius: '4px'}}
             title="Add Album"
           >
@@ -171,7 +169,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           
           <button
             onClick={() => setShowCreateModal('folder')}
-            className="p-3 text-base-content/50 hover:text-orange-500 hover:bg-orange-50 transition-all duration-200 border-2 border-base-300 hover:border-orange-300"
+            className="p-3 text-base-content/50 hover:text-orange-500 transition-all duration-200"
             style={{borderRadius: '4px'}}
             title="Add Folder"
           >
@@ -182,7 +180,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           
           <button
             onClick={() => setShowCreateModal('tag')}
-            className="p-3 text-base-content/50 hover:text-green-500 hover:bg-green-50 transition-all duration-200 border-2 border-base-300 hover:border-green-300"
+            className="p-3 text-base-content/50 hover:text-green-500 transition-all duration-200"
             style={{borderRadius: '4px'}}
             title="Add Tag"
           >
@@ -197,7 +195,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByCompleted}
             onChange={e => setFilterByCompleted(e.target.value as any)}
-            className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
+          className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
             style={{borderRadius: '4px'}}
           >
             <option value="all">All Songs</option>
@@ -208,7 +206,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByFolder}
             onChange={e => setFilterByFolder(e.target.value)}
-            className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
+            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
             style={{borderRadius: '4px'}}
           >
             <option value="all">All Folders</option>
@@ -220,7 +218,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByAlbum}
             onChange={e => setFilterByAlbum(e.target.value)}
-            className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
+            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
             style={{borderRadius: '4px'}}
           >
             <option value="all">All Albums</option>
@@ -232,7 +230,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByTag}
             onChange={e => setFilterByTag(e.target.value)}
-            className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
+            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
             style={{borderRadius: '4px'}}
           >
             <option value="all">All Tags</option>
@@ -244,7 +242,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as any)}
-            className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
+            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
             style={{borderRadius: '4px'}}
           >
             <option value="updated_at">Sort by Updated</option>
@@ -262,7 +260,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
         </div>
       ) : filteredSongs.length === 0 ? (
         <div className="text-center py-12">
-          <svg className="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+          <svg className="w-20 h-20 mx-auto mb-4 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
           </svg>
           <p className="text-base-content/60 text-sm md:text-base">
