@@ -52,14 +52,14 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-base-200">
+    <main className="min-h-screen">
       <Header
         activeTab={activeTab}
         onTabChange={handleTabChange} 
         lyricsCount={lyrics.length}
       />
 
-      <div className="bg-base-900 mx-auto px-2 md:px-4 pt-24 pb-8">
+      <div className="mx-auto px-2 md:px-4 pt-24 pb-8">
         <div className="max-w-7xl mx-auto">
           {activeTab === 'library' && (
             <SongLibrary

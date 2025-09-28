@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   :root {
@@ -13,13 +11,6 @@
   :focus-visible {
     outline: 2px solid hsl(var(--primary));
     outline-offset: 2px;
-  }
-}
-
-@layer components {
-  /* Custom component extensions can go here */
-  .btn-square {
-    @apply aspect-square;
   }
 }
 
