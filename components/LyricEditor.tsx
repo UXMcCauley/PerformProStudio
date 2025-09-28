@@ -104,13 +104,8 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     if (lyrics.length > 0) {
       const lyricsText = lyrics.map(l => l.text).join('\n');
       setRawLyrics(lyricsText);
-      // Initialize lyrics history
-      setLyricsHistory([lyrics]);
-      setHistoryIndex(0);
     } else {
       setRawLyrics('');
-      setLyricsHistory([]);
-      setHistoryIndex(-1);
     }
     
     setHasChanges(false);

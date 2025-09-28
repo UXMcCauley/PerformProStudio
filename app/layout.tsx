@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html data-theme="synthwave" lang="en">
       <body className="antialiased">
         <ThemeProvider>
           {children}
