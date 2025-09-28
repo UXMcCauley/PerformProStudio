@@ -86,19 +86,47 @@ export async function getUserSettings(userId: string): Promise<UserSettings | nu
 }
 
 export async function upsertUserSettings(userId: string, theme: 'light' | 'dark'): Promise<UserSettings | null> {
-  const { data, error } = await supabase
-    .from('user_settings')
-    .upsert(
-      { user_id: userId, theme },
-      { onConflict: 'user_id' }
-    )
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error upserting user settings:', error);
+  // Debug logging
+  console.log('Upserting user settings:', { userId, theme, themeType: typeof theme });
+  
+  // Ensure theme is exactly 'light' or 'dark' and is a valid string
+  if (typeof theme !== 'string' || !['light', 'dark'].includes(theme)) {
+    console.error('Invalid theme value:', theme);
     return null;
   }
-
-  return data;
+  
+  const validTheme: 'light' | 'dark' = theme;
+  console.log('Validated theme:', validTheme);
+  
+  // Check if user settings already exist
+  const existingSettings = await getUserSettings(userId);
+  
+  if (existingSettings) {
+    // Update existing settings
+    const { data, error } = await supabase
+      .from('user_settings')
+      .update({ theme: validTheme, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .select();
+      
+    if (error) {
+      console.error('Error updating user settings:', error);
+      return null;
+    }
+    
+    return data && data.length > 0 ? data[0] : null;
+  } else {
+    // Insert new settings
+    const { data, error } = await supabase
+      .from('user_settings')
+      .insert({ user_id: userId, theme: validTheme })
+      .select();
+      
+    if (error) {
+      console.error('Error inserting user settings:', error);
+      return null;
+    }
+    
+    return data && data.length > 0 ? data[0] : null;
+  }
 }

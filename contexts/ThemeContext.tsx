@@ -52,7 +52,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(newTheme);
 
     if (user?.id) {
-      await upsertUserSettings(user.id, newTheme);
+      try {
+        const result = await upsertUserSettings(user.id, newTheme);
+        if (!result) {
+          console.warn('Failed to save theme to database, falling back to localStorage');
+          localStorage.setItem('theme', newTheme);
+        }
+      } catch (error) {
+        console.error('Error saving theme:', error);
+        localStorage.setItem('theme', newTheme);
+      }
     } else {
       localStorage.setItem('theme', newTheme);
     }
