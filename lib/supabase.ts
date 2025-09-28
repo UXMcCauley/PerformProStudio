@@ -5,6 +5,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Add Row Level Security (RLS) helper
+export const getAuthenticatedSupabase = () => {
+  return supabase;
+};
+
 export type Song = {
   id: string;
   title: string;

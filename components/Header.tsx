@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
   activeTab: 'library' | 'editor' | 'teleprompter' | 'metrics' | 'settings';
@@ -15,6 +16,7 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const themeDropdownRef = useRef<HTMLDivElement>(null);
   const { theme, setTheme, availableThemes } = useTheme();
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -173,7 +175,7 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
             </div>
 
         {/* Profile Avatar Dropdown */}
-        <div className="dropdown dropdown-end" ref={dropdownRef}>
+        <div className="relative" ref={dropdownRef}>
           <div 
             tabIndex={0} 
             role="button" 
@@ -181,16 +183,18 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
             onClick={() => setShowDropdown(!showDropdown)}
           >
             <div className="w-10 rounded-full bg-primary text-primary-content flex items-center justify-center font-semibold">
-              U
+              {user?.user_metadata?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
             </div>
           </div>
 
           {showDropdown && (
-            <ul tabIndex={0} className="dropdown-content menu bg-base-100 rounded-box z-[1] w-64 p-2 shadow-xl border border-base-300 mt-3">
+            <ul tabIndex={0} className="absolute right-0 mt-2 menu bg-base-100 rounded-box z-[60] w-64 p-2 shadow-xl border border-base-300">
               <li className="menu-title">
                 <span>
-                  <div className="text-sm font-semibold text-base-content">User Name</div>
-                  <div className="text-xs text-base-content/60">user@example.com</div>
+                  <div className="text-sm font-semibold text-base-content">
+                    {user?.user_metadata?.displayName || 'User'}
+                  </div>
+                  <div className="text-xs text-base-content/60">{user?.email}</div>
                 </span>
               </li>
               <li>
@@ -211,8 +215,8 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
               <div className="divider my-1"></div>
               <li>
                 <button
-                  onClick={() => {
-                    // Handle logout
+                  onClick={async () => {
+                    await signOut();
                     setShowDropdown(false);
                   }}
                   className="text-error flex items-center gap-2"
