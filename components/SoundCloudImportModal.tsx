@@ -249,10 +249,16 @@ export default function SoundCloudImportModal({ isOpen, onClose }: Props) {
                     {searching ? <span className="loading loading-spinner loading-sm"></span> : 'Search'}
                   </button>
                 </div>
+              </div>
 
-                {/* Search Results */}
-                {playlists.length > 0 && (
-                  <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
+              {/* Select Playlist */}
+              {playlists.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold text-base-content mb-2">Select Playlist</h3>
+                  <p className="text-sm text-base-content/60 mb-4">
+                    Choose a playlist to import
+                  </p>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
                     {playlists.map((playlist) => (
                       <div
                         key={playlist.id}
@@ -277,8 +283,8 @@ export default function SoundCloudImportModal({ isOpen, onClose }: Props) {
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Divider */}
               <div className="divider">OR</div>
