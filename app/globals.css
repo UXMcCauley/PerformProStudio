@@ -1,9 +1,12 @@
 @import "tailwindcss";
+
 @plugin "daisyui" {
     themes: synthwave, nord;
 }
 
 :root {
+
+    
     /* synthwave */
     [data-theme="synthwave"] {
         --color-base-100: oklch(21.8216% 0.081948 287.835609);

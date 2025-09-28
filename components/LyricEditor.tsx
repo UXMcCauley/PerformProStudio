@@ -362,8 +362,8 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   };
 
   return (
-    <div className="bg-base-100 shadow-lg border border-base-300 p-4 md:p-6">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="">
+      <div  className="flex items-center gap-3 mb-6">
         {showBackButton && onBack && (
           <button
             onClick={onBack}
