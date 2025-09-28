@@ -127,7 +127,12 @@ export async function getUserSettings(userId: string): Promise<UserSettings | nu
 
 export async function upsertUserSettings(
   userId: string,
-  settings: { theme?: 'light' | 'dark'; name?: string; email?: string; avatar?: string | null }
+  settings: {
+    theme?: 'light' | 'dark';
+    name?: string;
+    email?: string;
+    avatar?: string | null;
+  }
 ): Promise<UserSettings | null> {
   console.log('Upserting user settings:', { userId, settings });
 

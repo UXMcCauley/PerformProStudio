@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { upsertUserSettings, getUserSettings, getUserBands, createBand, Band, supabase, getUserTagConfigs, upsertTagConfig, TagConfig } from '@/lib/supabase';
+import SoundCloudImportModal from './SoundCloudImportModal';
 
 interface Props {
   onBack?: () => void;
@@ -13,7 +14,7 @@ interface Props {
 export default function Settings({ onBack, showBackButton = false }: Props) {
   const { theme, setTheme } = useTheme();
   const { user } = useAuth();
-  const [activeSection, setActiveSection] = useState<'personal' | 'bands' | 'tags' | 'theme'>('personal');
+  const [activeSection, setActiveSection] = useState<'personal' | 'bands' | 'tags' | 'integrations' | 'theme'>('personal');
   const [name, setName] = useState('User Name');
   const [email, setEmail] = useState('user@example.com');
   const [avatar, setAvatar] = useState<string | null>(null);
@@ -21,6 +22,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
   const [tagConfigs, setTagConfigs] = useState<TagConfig[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('purple');
+  const [showImportModal, setShowImportModal] = useState(false);
   const [newBand, setNewBand] = useState('');
   const [hasPersonalChanges, setHasPersonalChanges] = useState(false);
   const [originalPersonalData, setOriginalPersonalData] = useState({ name: 'User Name', email: 'user@example.com', avatar: null as string | null });
@@ -224,6 +226,17 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
                 </svg>
                 Tags
+              </a>
+            </li>
+            <li>
+              <a
+                onClick={() => setActiveSection('integrations')}
+                className={activeSection === 'integrations' ? 'active' : ''}
+              >
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                </svg>
+                Integrations
               </a>
             </li>
             <li>
@@ -473,6 +486,42 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
             </div>
           )}
 
+          {activeSection === 'integrations' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-base-content mb-4">Integrations</h3>
+                <p className="text-sm text-base-content/60 mb-6">
+                  Import content from external services
+                </p>
+
+                {/* SoundCloud Integration */}
+                <div className="border border-base-300 rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 17.939h-1v-8.068c.308-.231.639-.429 1-.566v8.634zm3 0h1v-9.224c-.229.265-.443.548-.621.857l-.379-.184v8.551zm-2 0h1v-8.848c-.508-.079-.623-.05-1-.01v8.858zm-4 0h1v-7.02c-.312.458-.555.971-.692 1.535l-.308-.182v5.667zm-3-5.25c-.606.547-1 1.354-1 2.268 0 .914.394 1.721 1 2.268v-4.536zm18.879-.671c-.204-2.837-2.404-5.079-5.117-5.079-1.022 0-1.964.328-2.762.877v10.123h9.089c1.607 0 2.911-1.393 2.911-3.106 0-2.043-2.061-3.15-4.121-2.815z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-base-content">SoundCloud</h4>
+                        <p className="text-sm text-base-content/60">
+                          Import tracks and playlists by URL
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="btn btn-sm btn-primary"
+                    >
+                      Import
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeSection === 'theme' && (
             <div className="space-y-6">
               <div>
@@ -539,6 +588,9 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
           )}
         </div>
       </div>
+
+      {/* SoundCloud Import Modal */}
+      <SoundCloudImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />
     </div>
   );
 }
