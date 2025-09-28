@@ -256,20 +256,20 @@ export default function Teleprompter({ song, lyrics }: Props) {
         ref={containerRef}
         className={`${
           isFullscreen
-            ? 'fixed inset-0 z-50 bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex flex-col'
-            : 'bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg shadow-purple-500/10 border border-slate-200/50 p-4 md:p-6'
+            ? 'fixed inset-0 z-50 bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 flex flex-col'
+            : 'bg-white/80 backdrop-blur-xs rounded-2xl shadow-lg shadow-purple-500/10 border border-slate-200/50 p-4 md:p-6'
         }`}
       >
         {!isFullscreen && (
           <>
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full" />
-              <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <div className="w-1 h-8 bg-linear-to-b from-purple-500 to-pink-500 rounded-full" />
+              <h2 className="text-xl md:text-2xl font-bold bg-linear-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                 Teleprompter
               </h2>
             </div>
             {!song?.instrumental_url && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-xl">
+              <div className="mb-6 p-4 bg-linear-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-xl">
                 <p className="text-sm md:text-base text-amber-800">
                   No instrumental track set. Add one in the editor to use the teleprompter.
                 </p>
@@ -294,7 +294,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
           </div>
         )}
 
-        <div className={`flex items-center gap-2 md:gap-3 ${isFullscreen ? 'p-4 justify-center' : 'bg-gradient-to-r from-slate-50 to-purple-50/50 p-3 md:p-4 rounded-xl mb-6 flex-wrap border border-slate-200/50'}`}>
+        <div className={`flex items-center gap-2 md:gap-3 ${isFullscreen ? 'p-4 justify-center' : 'bg-linear-to-r from-slate-50 to-purple-50/50 p-3 md:p-4 rounded-xl mb-6 flex-wrap border border-slate-200/50'}`}>
           {!isFullscreen && (
             <>
               <button
@@ -449,7 +449,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
         </div>
 
         {!isFullscreen && syncMode && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl animate-pulse">
+          <div className="mb-6 p-4 bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl animate-pulse">
             <p className="text-blue-800 text-xs md:text-sm">
               <strong>🎯 Sync Mode:</strong> Play the track and click on each line when it should appear
             </p>
@@ -458,8 +458,8 @@ export default function Teleprompter({ song, lyrics }: Props) {
 
         <div className={`rounded-2xl overflow-y-auto ${
           isFullscreen
-            ? 'flex-1 bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4 md:p-8'
-            : 'bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 p-4 md:p-8 min-h-[300px] md:min-h-[500px] max-h-[600px] border border-slate-800/50 shadow-inner'
+            ? 'flex-1 bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 p-4 md:p-8'
+            : 'bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 p-4 md:p-8 min-h-[300px] md:min-h-[500px] max-h-[600px] border border-slate-800/50 shadow-inner'
         }`}>
           {lyrics.length === 0 ? (
             <div className="text-center text-slate-500 py-20">No lyrics to display</div>

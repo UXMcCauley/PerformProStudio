@@ -390,7 +390,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   setEditingTitle(false);
                 }
               }}
-              className="text-xl md:text-2xl font-bold text-base-content bg-transparent border-b-2 border-primary focus:outline-none w-full"
+              className="text-xl md:text-2xl font-bold text-base-content bg-transparent border-b-2 border-primary focus:outline-hidden w-full"
               placeholder="Song title"
               autoFocus
             />
@@ -433,7 +433,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             type="text"
             value={artist}
             onChange={e => setArtist(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
+            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
             placeholder="Artist name"
           />
         </div>
@@ -506,7 +506,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                     <button
                       type="button"
                       onClick={() => removeTag(tag)}
-                      className="group ml-1 p-0.5 rounded transition-colors"
+                      className="group ml-1 p-0.5 rounded-sm transition-colors"
                     >
                       <svg className="w-3 h-3 text-purple-500 group-hover:text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -523,7 +523,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                 onChange={e => setNewTag(e.target.value)}
                 onKeyDown={handleNewTagKeyPress}
                 placeholder="Add custom tag..."
-                className="flex-1 px-3 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all duration-300"
+                className="flex-1 px-3 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all duration-300"
               />
               <button
                 type="button"
@@ -549,7 +549,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             type="text"
             value={soundcloudUrl}
             onChange={e => setSoundcloudUrl(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
+            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
             placeholder="https://soundcloud.com/..."
           />
         </div>
@@ -564,7 +564,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             type="text"
             value={instrumentalUrl}
             onChange={e => setInstrumentalUrl(e.target.value)}
-            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
+            className="w-full px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm md:text-base transition-all duration-300"
             placeholder="https://soundcloud.com/..."
           />
         </div>
@@ -581,7 +581,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           <textarea
             value={rawLyrics}
             onChange={e => setRawLyrics(e.target.value)}
-            className="w-full h-48 md:h-64 px-3 md:px-4 py-2 bg-base-100 backdrop-blur-sm border border-base-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono text-sm md:text-base transition-all duration-300"
+            className="w-full h-48 md:h-64 px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono text-sm md:text-base transition-all duration-300"
             placeholder="Paste your lyrics here..."
           />
           <div className="flex gap-2 mt-4">
@@ -659,7 +659,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   type="text"
                   value={line.text}
                   onChange={e => updateLyricLine(index, e.target.value)}
-                  className="flex-1 px-2 md:px-3 py-1 md:py-2 bg-base-100 border border-base-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-xs md:text-base transition-all duration-300"
+                  className="flex-1 px-2 md:px-3 py-1 md:py-2 bg-base-100 border border-base-300 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-xs md:text-base transition-all duration-300"
                   style={{borderRadius: '4px'}}
                 />
                 <button

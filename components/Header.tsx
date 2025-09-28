@@ -32,7 +32,7 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   return (
-    <header className="navbar bg-base-100 shadow-sm">
+    <header className="navbar bg-base-100 shadow-xs">
       <div className="navbar-start justify-right  ">
         <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
@@ -188,7 +188,7 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
           </div>
 
           {showDropdown && (
-            <ul tabIndex={0} className="absolute right-0 mt-2 menu bg-base-100 rounded-box z-[60] w-64 p-2 shadow-xl border border-base-300">
+            <ul tabIndex={0} className="absolute right-0 mt-2 menu bg-base-100 rounded-box z-60 w-64 p-2 shadow-xl border border-base-300">
               <li className="menu-title">
                 <span>
                   <div className="text-sm font-semibold text-base-content">

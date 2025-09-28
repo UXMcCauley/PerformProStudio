@@ -123,7 +123,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                       type="text"
                       value={name}
                       onChange={e => setName(e.target.value)}
-                      className="w-full px-4 py-2 bg-base-100 border border-base-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                      className="w-full px-4 py-2 bg-base-100 border border-base-300 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                     />
                   </div>
 
@@ -133,7 +133,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                       type="email"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
-                      className="w-full px-4 py-2 bg-base-100 border border-base-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                      className="w-full px-4 py-2 bg-base-100 border border-base-300 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                     />
                   </div>
 
@@ -149,7 +149,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 <h3 className="text-lg font-semibold text-base-content mb-2">Profile Avatar</h3>
                 <p className="text-sm text-base-content/60 mb-4">Your avatar is generated from your initials</p>
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                  <div className="w-16 h-16 bg-linear-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg">
                     {name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
                 </div>
@@ -196,7 +196,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                     onChange={e => setNewBand(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAddBand()}
                     placeholder="Add new band..."
-                    className="flex-1 px-4 py-2 border border-slate-300 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                    className="flex-1 px-4 py-2 border border-slate-300 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   />
                   <button
                     onClick={handleAddBand}
