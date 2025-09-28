@@ -2,23 +2,53 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-type Theme = 'light' | 'dark' | 'auto';
+type DaisyUITheme = 
+  | 'light'
+  | 'dark' 
+  | 'synthwave'
+  | 'retro'
+  | 'cyberpunk'
+  | 'valentine'
+  | 'aqua'
+  | 'luxury'
+  | 'dracula'
+  | 'night'
+  | 'coffee'
+  | 'winter'
+  | 'auto';
 
 interface ThemeContextType {
-  theme: Theme;
-  effectiveTheme: 'light' | 'dark';
-  setTheme: (theme: Theme) => void;
+  theme: DaisyUITheme;
+  effectiveTheme: string;
+  setTheme: (theme: DaisyUITheme) => void;
+  availableThemes: DaisyUITheme[];
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const availableThemes: DaisyUITheme[] = [
+  'light',
+  'dark', 
+  'synthwave',
+  'retro',
+  'cyberpunk',
+  'valentine',
+  'aqua',
+  'luxury',
+  'dracula',
+  'night',
+  'coffee',
+  'winter',
+  'auto'
+];
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light');
-  const [effectiveTheme, setEffectiveTheme] = useState<'light' | 'dark'>('light');
+  const [theme, setThemeState] = useState<DaisyUITheme>('light');
+  const [effectiveTheme, setEffectiveTheme] = useState<string>('light');
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
+    const savedTheme = localStorage.getItem('theme') as DaisyUITheme;
+    if (savedTheme && availableThemes.includes(savedTheme)) {
       setThemeState(savedTheme);
     }
   }, []);
@@ -47,13 +77,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.setAttribute('data-theme', effectiveTheme);
   }, [effectiveTheme]);
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = (newTheme: DaisyUITheme) => {
     setThemeState(newTheme);
     localStorage.setItem('theme', newTheme);
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, effectiveTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, effectiveTheme, setTheme, availableThemes }}>
       {children}
     </ThemeContext.Provider>
   );

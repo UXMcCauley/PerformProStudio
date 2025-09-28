@@ -128,7 +128,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
   };
 
   return (
-    <div className="backdrop-blur-sm p-4 md:p-6">
+    <div className="p-4 md:p-6">
       <div className="space-y-6 mb-6">
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
@@ -137,7 +137,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
               placeholder="Search songs, artists, albums, folders, tags..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-foreground-100/20 focus:outline-none focus:border-secondary/50 text-sm md:text-base transition-all duration-300 hover:border-secondary/50 backdrop-blur-sm"
+              className="input input-bordered w-full pl-11"
             />
             <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8" />
@@ -148,7 +148,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           {/* Icon-only buttons */}
           <button
             onClick={onNewSong}
-            className="p-3 text-base-content/50 hover:text-purple-500 transition-all duration-200 "
+            className="btn btn-ghost btn-square text-primary hover:bg-primary hover:text-primary-content"
             title="Add Song"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -158,8 +158,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           
           <button
             onClick={() => setShowCreateModal('album')}
-            className="p-3 text-base-content/50 hover:text-blue-500  transition-all duration-200"
-            style={{borderRadius: '4px'}}
+            className="btn btn-ghost btn-square text-info hover:bg-info hover:text-info-content"
             title="Add Album"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -169,8 +168,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           
           <button
             onClick={() => setShowCreateModal('folder')}
-            className="p-3 text-base-content/50 hover:text-orange-500 transition-all duration-200"
-            style={{borderRadius: '4px'}}
+            className="btn btn-ghost btn-square text-warning hover:bg-warning hover:text-warning-content"
             title="Add Folder"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -180,8 +178,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           
           <button
             onClick={() => setShowCreateModal('tag')}
-            className="p-3 text-base-content/50 hover:text-green-500 transition-all duration-200"
-            style={{borderRadius: '4px'}}
+            className="btn btn-ghost btn-square text-success hover:bg-success hover:text-success-content"
             title="Add Tag"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -195,8 +192,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByCompleted}
             onChange={e => setFilterByCompleted(e.target.value as any)}
-          className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
-            style={{borderRadius: '4px'}}
+            className="select select-bordered select-sm"
           >
             <option value="all">All Songs</option>
             <option value="completed">Completed</option>
@@ -206,8 +202,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByFolder}
             onChange={e => setFilterByFolder(e.target.value)}
-            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
-            style={{borderRadius: '4px'}}
+            className="select select-bordered select-sm"
           >
             <option value="all">All Folders</option>
             {folders.map(folder => (
@@ -218,8 +213,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByAlbum}
             onChange={e => setFilterByAlbum(e.target.value)}
-            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
-            style={{borderRadius: '4px'}}
+            className="select select-bordered select-sm"
           >
             <option value="all">All Albums</option>
             {albums.map(album => (
@@ -230,8 +224,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={filterByTag}
             onChange={e => setFilterByTag(e.target.value)}
-            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
-            style={{borderRadius: '4px'}}
+            className="select select-bordered select-sm"
           >
             <option value="all">All Tags</option>
             {allTags.map(tag => (
@@ -242,8 +235,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as any)}
-            className="px-3 py-2  bg-base-100 text-base-content text-sm focus:outline-none focus:border-purple-500"
-            style={{borderRadius: '4px'}}
+            className="select select-bordered select-sm"
           >
             <option value="updated_at">Sort by Updated</option>
             <option value="title">Sort by Title</option>
@@ -275,20 +267,19 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
               onClick={() => handleSelectSong(song)}
               onMouseEnter={() => setHoveredSong(song.id)}
               onMouseLeave={() => setHoveredSong(null)}
-              className="group border-2 border-base-300 p-4 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/20 bg-gradient-to-br from-base-100 to-purple-50/20 cursor-pointer hover:border-purple-300"
-              style={{borderRadius: '4px'}}
+              className="card card-bordered bg-base-100 cursor-pointer hover:shadow-lg hover:border-primary/50 transition-all duration-300 p-4"
             >
               <div className="flex justify-between items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <svg className="w-5 h-5 text-purple-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-primary flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
                     </svg>
                     <h3 className="text-base md:text-xl font-bold text-base-content truncate flex-1">
                       {song.title}
                     </h3>
                     {song.completed && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold border border-green-200" style={{borderRadius: '4px'}}>
+                      <span className="badge badge-success badge-sm">
                         ✓ Complete
                       </span>
                     )}
@@ -297,10 +288,10 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
                         onClick={e => {
                           e.stopPropagation();
                         }}
-                        className="group/move p-1 transition-all duration-300"
+                        className="btn btn-ghost btn-xs"
                         title="Move"
                       >
-                        <svg className="w-4 h-4 text-base-content/50 group-hover/move:text-purple-400 group-hover/move:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
                         </svg>
                       </button>
@@ -309,10 +300,10 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
                           e.stopPropagation();
                           handleSelectSong(song);
                         }}
-                        className="group/edit p-1 transition-all duration-300"
+                        className="btn btn-ghost btn-xs text-info"
                         title="Edit"
                       >
-                        <svg className="w-4 h-4 text-base-content/50 group-hover/edit:text-blue-500 group-hover/edit:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
@@ -321,19 +312,19 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
                           e.stopPropagation();
                           onViewMetrics?.(song);
                         }}
-                        className="group/metrics p-1 transition-all duration-300"
+                        className="btn btn-ghost btn-xs text-success"
                         title="View Metrics"
                       >
-                        <svg className="w-4 h-4 text-base-content/50 group-hover/metrics:text-green-500 group-hover/metrics:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
                       </button>
                       <button
                         onClick={e => handleDeleteSong(song.id, e)}
-                        className="group/delete p-1 transition-all duration-300"
+                        className="btn btn-ghost btn-xs text-error"
                         title="Delete"
                       >
-                        <svg className="w-4 h-4 text-base-content/50 group-hover/delete:text-red-500 group-hover/delete:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
@@ -381,36 +372,38 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics }: 
       
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateModal(null)}>
-          <div className="bg-base-100 p-6 border border-base-300 max-w-md w-full mx-4" style={{borderRadius: '4px'}} onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4 text-base-content">
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">
               Add New {showCreateModal.charAt(0).toUpperCase() + showCreateModal.slice(1)}
             </h3>
-            <input
-              type="text"
-              placeholder={`Enter ${showCreateModal} name...`}
-              value={newItemName}
-              onChange={e => setNewItemName(e.target.value)}
-              className="w-full px-3 py-2 border border-base-300 text-base-content focus:outline-none focus:border-purple-500 mb-4"
-              style={{borderRadius: '4px'}}
-              onKeyDown={e => e.key === 'Enter' && handleCreateItem()}
-              autoFocus
-            />
-            <div className="flex gap-2 justify-end">
+            <div className="py-4">
+              <input
+                type="text"
+                placeholder={`Enter ${showCreateModal} name...`}
+                value={newItemName}
+                onChange={e => setNewItemName(e.target.value)}
+                className="input input-bordered w-full"
+                onKeyDown={e => e.key === 'Enter' && handleCreateItem()}
+                autoFocus
+              />
+            </div>
+            <div className="modal-action">
               <button
                 onClick={() => setShowCreateModal(null)}
-                className="px-4 py-2 text-base-content/70 hover:text-base-content transition-colors"
+                className="btn btn-ghost"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreateItem}
-                className="px-4 py-2 bg-purple-600 text-white hover:bg-purple-700 transition-colors"
-                style={{borderRadius: '4px'}}
+                className="btn btn-primary"
               >
                 Create
               </button>
             </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setShowCreateModal(null)}>
           </div>
         </div>
       )}
