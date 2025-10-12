@@ -37,3 +37,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# vscode
+.vscode
+
+# cursor
+.cursorrules  
+
+IntelliPrompter.code-workspace
+
+# intellij
+.idea
+
+# macos
+.DS_Store
