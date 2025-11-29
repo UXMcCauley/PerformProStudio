@@ -1,12 +1,20 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session, AuthError } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { createContext, useContext, ReactNode } from 'react';
+import { SessionProvider, useSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from 'next-auth/react';
+
+interface AuthUser {
+  id: string;
+  email: string;
+  name?: string | null;
+}
+
+interface AuthError {
+  message: string;
+}
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
   loading: boolean;
   signUp: (email: string, password: string, metadata?: { displayName?: string }) => Promise<{ error: AuthError | null }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
@@ -16,90 +24,103 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+function AuthContextProvider({ children }: { children: ReactNode }) {
+  const { data: session, status } = useSession();
+  const loading = status === 'loading';
 
-  useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Error getting session:', error);
-      } else {
-        setSession(session);
-        setUser(session?.user ?? null);
-      }
-      setLoading(false);
-    };
-
-    getInitialSession();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email);
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
+  const user: AuthUser | null = session?.user ? {
+    id: session.user.id,
+    email: session.user.email!,
+    name: session.user.name,
+  } : null;
 
   const signUp = async (email: string, password: string, metadata?: { displayName?: string }) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          displayName: metadata?.displayName,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { error: { message: data.error || 'Signup failed' } };
+      }
+
+      // Auto sign in after signup
+      const signInResult = await nextAuthSignIn('credentials', {
         email,
         password,
-        options: {
-          data: metadata || {}
-        }
+        redirect: false,
       });
-      return { error };
+
+      if (signInResult?.error) {
+        return { error: { message: signInResult.error } };
+      }
+
+      return { error: null };
     } catch (error) {
-      return { error: error as AuthError };
+      return { error: { message: 'An unexpected error occurred' } };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const result = await nextAuthSignIn('credentials', {
         email,
         password,
+        redirect: false,
       });
-      return { error };
+
+      if (result?.error) {
+        return { error: { message: result.error } };
+      }
+
+      return { error: null };
     } catch (error) {
-      return { error: error as AuthError };
+      return { error: { message: 'An unexpected error occurred' } };
     }
   };
 
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      return { error };
+      await nextAuthSignOut({ redirect: false });
+      return { error: null };
     } catch (error) {
-      return { error: error as AuthError };
+      return { error: { message: 'Failed to sign out' } };
     }
   };
 
   const resetPassword = async (email: string) => {
+    // Note: Password reset requires an email service.
+    // For now, this is a placeholder that will need to be implemented
+    // with a service like SendGrid, Resend, or AWS SES.
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
       });
-      return { error };
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { error: { message: data.error || 'Password reset failed' } };
+      }
+
+      return { error: null };
     } catch (error) {
-      return { error: error as AuthError };
+      return { error: { message: 'Password reset is not currently available' } };
     }
   };
 
   const value = {
     user,
-    session,
     loading,
     signUp,
     signIn,
@@ -111,6 +132,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
+  );
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  return (
+    <SessionProvider>
+      <AuthContextProvider>{children}</AuthContextProvider>
+    </SessionProvider>
   );
 }
 

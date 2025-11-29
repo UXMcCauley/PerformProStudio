@@ -1,7 +1,41 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { supabase, Song, LyricLine } from '@/lib/supabase';
+import { useState, useEffect, useRef } from 'react';
+import Script from 'next/script';
+
+declare global {
+  interface Window {
+    SC: any;
+  }
+}
+
+type Song = {
+  _id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  folder: string | null;
+  tags: string[];
+  soundcloud_url: string | null;
+  instrumental_url: string | null;
+  completed: boolean;
+  band_id: string | null;
+  album_id: string | null;
+  folder_id: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type LyricLine = {
+  _id: string;
+  song_id: string;
+  line_number: number;
+  text: string;
+  timestamp_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
 
 interface Props {
   onSelectSong: (song: Song, lyrics: LyricLine[]) => void;
@@ -25,65 +59,259 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
   const [showFilters, setShowFilters] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
 
+  // SoundCloud player state
+  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
+  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [scWidget, setScWidget] = useState<any>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Initialize SoundCloud widget when URL changes
+  useEffect(() => {
+    if (!playingUrl || !iframeRef.current) return;
+
+    // Wait for SC API to be available
+    const initWidget = () => {
+      if (!window.SC?.Widget || !iframeRef.current) return;
+
+      try {
+        const widget = window.SC.Widget(iframeRef.current);
+        setScWidget(widget);
+
+        const handleReady = () => {
+          try {
+            widget.play();
+            setIsPlaying(true);
+          } catch (err) {
+            console.error('Error playing widget:', err);
+          }
+        };
+
+        const handlePlay = () => setIsPlaying(true);
+        const handlePause = () => setIsPlaying(false);
+        const handleFinish = () => {
+          setIsPlaying(false);
+          setPlayingSongId(null);
+          setPlayingUrl(null);
+        };
+
+        widget.bind(window.SC.Widget.Events.READY, handleReady);
+        widget.bind(window.SC.Widget.Events.PLAY, handlePlay);
+        widget.bind(window.SC.Widget.Events.PAUSE, handlePause);
+        widget.bind(window.SC.Widget.Events.FINISH, handleFinish);
+
+        return () => {
+          try {
+            widget.unbind(window.SC.Widget.Events.READY);
+            widget.unbind(window.SC.Widget.Events.PLAY);
+            widget.unbind(window.SC.Widget.Events.PAUSE);
+            widget.unbind(window.SC.Widget.Events.FINISH);
+          } catch (err) {
+            // Ignore cleanup errors
+          }
+        };
+      } catch (err) {
+        console.error('Error initializing SoundCloud widget:', err);
+      }
+    };
+
+    // Check if SC is already loaded
+    if (window.SC?.Widget) {
+      const cleanup = initWidget();
+      return cleanup;
+    }
+
+    // Wait for SC to load
+    const checkSC = setInterval(() => {
+      if (window.SC?.Widget) {
+        clearInterval(checkSC);
+        initWidget();
+      }
+    }, 100);
+
+    return () => {
+      clearInterval(checkSC);
+    };
+  }, [playingUrl]);
+
+  const handlePlayReference = (song: Song, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (!song.soundcloud_url) return;
+
+    if (playingSongId === song._id) {
+      // Toggle play/pause for same song
+      if (scWidget) {
+        try {
+          if (isPlaying) {
+            scWidget.pause();
+          } else {
+            scWidget.play();
+          }
+        } catch (err) {
+          console.error('Error toggling playback:', err);
+        }
+      }
+    } else {
+      // Play new song
+      setPlayingSongId(song._id);
+      setPlayingUrl(song.soundcloud_url);
+    }
+  };
+
+  const stopPlayback = () => {
+    try {
+      if (scWidget) {
+        scWidget.pause();
+      }
+    } catch (err) {
+      // Ignore errors when stopping
+    }
+    setScWidget(null);
+    setPlayingSongId(null);
+    setPlayingUrl(null);
+    setIsPlaying(false);
+  };
+
   useEffect(() => {
     loadSongs();
   }, []);
 
   const loadSongs = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('songs')
-      .select('*')
-      .order('updated_at', { ascending: false });
-
-    if (error) {
+    try {
+      const response = await fetch('/api/songs');
+      if (response.ok) {
+        const data = await response.json();
+        setSongs(data || []);
+      } else {
+        console.error('Error loading songs');
+      }
+    } catch (error) {
       console.error('Error loading songs:', error);
-    } else {
-      setSongs(data || []);
     }
     setLoading(false);
   };
 
   const handleSelectSong = async (song: Song) => {
-    const { data, error } = await supabase
-      .from('lyric_lines')
-      .select('*')
-      .eq('song_id', song.id)
-      .order('line_number', { ascending: true });
-
-    if (error) {
+    try {
+      const response = await fetch(`/api/lyrics?songId=${song._id}`);
+      if (response.ok) {
+        const data = await response.json();
+        onSelectSong(song, data || []);
+      } else {
+        console.error('Error loading lyrics');
+      }
+    } catch (error) {
       console.error('Error loading lyrics:', error);
-      return;
     }
-
-    onSelectSong(song, data || []);
   };
 
   const handleLyricSync = async (song: Song) => {
-    const { data, error } = await supabase
-      .from('lyric_lines')
-      .select('*')
-      .eq('song_id', song.id)
-      .order('line_number', { ascending: true });
-
-    if (error) {
+    try {
+      const response = await fetch(`/api/lyrics?songId=${song._id}`);
+      if (response.ok) {
+        const data = await response.json();
+        onLyricSync?.(song, data || []);
+      } else {
+        console.error('Error loading lyrics');
+      }
+    } catch (error) {
       console.error('Error loading lyrics:', error);
-      return;
     }
-
-    onLyricSync?.(song, data || []);
   };
 
   const handleDeleteSong = async (songId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Are you sure you want to delete this song?')) return;
 
-    const { error } = await supabase.from('songs').delete().eq('id', songId);
+    try {
+      const response = await fetch(`/api/songs?id=${songId}`, {
+        method: 'DELETE',
+      });
 
-    if (error) {
+      if (response.ok) {
+        setSongs(songs.filter(s => s._id !== songId));
+      } else {
+        console.error('Error deleting song');
+      }
+    } catch (error) {
       console.error('Error deleting song:', error);
-    } else {
-      setSongs(songs.filter(s => s.id !== songId));
+    }
+  };
+
+  const handleToggleCompleted = async (song: Song, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    try {
+      const response = await fetch('/api/songs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: song._id, completed: !song.completed }),
+      });
+
+      if (response.ok) {
+        setSongs(songs.map(s => s._id === song._id ? { ...s, completed: !s.completed } : s));
+      } else {
+        console.error('Error toggling completed status');
+      }
+    } catch (error) {
+      console.error('Error toggling completed status:', error);
+    }
+  };
+
+  const handleDuplicateSong = async (song: Song, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    try {
+      // First get the lyrics for this song
+      const lyricsResponse = await fetch(`/api/lyrics?songId=${song._id}`);
+      const lyrics = lyricsResponse.ok ? await lyricsResponse.json() : [];
+
+      // Create the duplicated song
+      const response = await fetch('/api/songs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${song.title} (Copy)`,
+          artist: song.artist,
+          album: song.album,
+          folder: song.folder,
+          tags: song.tags,
+          soundcloud_url: song.soundcloud_url,
+          instrumental_url: song.instrumental_url,
+          completed: false,
+          band_id: song.band_id,
+          album_id: song.album_id,
+          folder_id: song.folder_id,
+        }),
+      });
+
+      if (response.ok) {
+        const newSong = await response.json();
+
+        // Copy the lyrics if there are any
+        if (lyrics.length > 0) {
+          await fetch('/api/lyrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              songId: newSong._id,
+              lines: lyrics.map((line: LyricLine) => ({
+                line_number: line.line_number,
+                text: line.text,
+                timestamp_ms: line.timestamp_ms,
+              })),
+            }),
+          });
+        }
+
+        setSongs([newSong, ...songs]);
+      } else {
+        console.error('Error duplicating song');
+      }
+    } catch (error) {
+      console.error('Error duplicating song:', error);
     }
   };
 
@@ -154,7 +382,76 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
   };
 
   return (
-    <div className="p-4 md:p-6">
+    <>
+      <Script
+        src="https://w.soundcloud.com/player/api.js"
+        strategy="lazyOnload"
+      />
+
+      {/* Hidden SoundCloud Player */}
+      {playingUrl && (
+        <div className="hidden">
+          <iframe
+            ref={iframeRef}
+            key={playingUrl}
+            width="0"
+            height="0"
+            scrolling="no"
+            frameBorder="no"
+            allow="autoplay"
+            src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(playingUrl)}&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false`}
+          />
+        </div>
+      )}
+
+      {/* Mini Player Bar - shows when playing */}
+      {playingSongId && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 bg-base-100 border border-base-300 shadow-xl rounded-full">
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.27-2.154c-.008-.058-.048-.1-.084-.1zm1.09-1.39c-.054 0-.098.044-.105.1l-.21 3.544.21 3.35c.007.057.051.096.105.096.053 0 .096-.039.105-.096l.24-3.35-.24-3.544c-.009-.056-.052-.1-.105-.1zm1.143-.19c-.053 0-.1.044-.107.1l-.212 3.735.212 3.35c.007.055.054.097.107.097.052 0 .098-.042.107-.097l.24-3.35-.24-3.735c-.009-.056-.055-.1-.107-.1zm1.115.427c-.063 0-.107.047-.115.1l-.19 3.407.19 3.35c.008.054.052.097.115.097.062 0 .106-.043.115-.097l.215-3.35-.215-3.407c-.009-.053-.053-.1-.115-.1zm1.18-.48c-.062 0-.11.047-.117.1l-.172 3.888.172 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.194-3.35-.194-3.888c-.009-.053-.056-.1-.117-.1zm1.18-.664c-.062 0-.11.047-.117.1l-.157 4.552.157 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.178-3.35-.178-4.552c-.009-.053-.056-.1-.117-.1zm1.227-.87c-.069 0-.12.052-.127.11l-.136 5.422.136 3.35c.007.058.058.1.127.1.068 0 .118-.042.127-.1l.154-3.35-.154-5.422c-.009-.058-.059-.11-.127-.11zm1.2-.52c-.07 0-.12.052-.127.11l-.12 5.942.12 3.35c.007.058.057.1.127.1.069 0 .12-.042.127-.1l.135-3.35-.135-5.942c-.007-.058-.058-.11-.127-.11zm1.227-.39c-.077 0-.13.057-.137.12l-.103 6.332.103 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.117-3.35-.117-6.332c-.009-.063-.06-.12-.137-.12zm1.227-.18c-.077 0-.13.057-.137.12l-.088 6.512.088 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.1-3.35-.1-6.512c-.009-.063-.06-.12-.137-.12zm4.797-.142c-.246 0-.483.025-.715.069-.147-1.606-1.505-2.87-3.163-2.87-.391 0-.768.072-1.119.204-.126.047-.162.093-.162.185v8.4c0 .097.07.177.166.19l5.008.003c1.38 0 2.5-1.068 2.5-2.387 0-1.32-1.12-2.394-2.5-2.394z"/>
+            </svg>
+            <span className="text-sm font-medium text-base-content max-w-[200px] truncate">
+              {songs.find(s => s._id === playingSongId)?.title || 'Playing...'}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              if (!scWidget) return;
+              try {
+                if (isPlaying) {
+                  scWidget.pause();
+                } else {
+                  scWidget.play();
+                }
+              } catch (err) {
+                console.error('Error toggling playback:', err);
+              }
+            }}
+            className="p-2 bg-orange-500 hover:bg-orange-600 text-white rounded-full transition-colors"
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              {isPlaying ? (
+                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+              ) : (
+                <path d="M8 5v14l11-7z"/>
+              )}
+            </svg>
+          </button>
+          <button
+            onClick={stopPlayback}
+            className="p-2 hover:bg-base-200 rounded-full transition-colors"
+            title="Stop"
+          >
+            <svg className="w-4 h-4 text-base-content/60" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6 6h12v12H6z"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
+      <div className="p-4 md:p-6">
       <div className="space-y-3 mb-">
         {showFilters && (
           <div className="flex flex-wrap items-center gap-2 bg-base-900">
@@ -319,9 +616,9 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
         <div className="w-full h-full flex flex-col justify-center items-center p-4">
           {filteredSongs.map(song => (
             <div
-              key={song.id}
+              key={song._id}
               onClick={() => handleSelectSong(song)}
-              onMouseEnter={() => setHoveredSong(song.id)}
+              onMouseEnter={() => setHoveredSong(song._id)}
               onMouseLeave={() => setHoveredSong(null)}
               className="p-4 gap-4 flex flex-col justify-between h-full w-full card card-bordered border-secondary opacity-70 hover:opacity-100 transition-opacity duration-300"
             >
@@ -388,7 +685,29 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
                             </svg>
                           </button>
                           <button
-                            onClick={e => handleDeleteSong(song.id, e)}
+                            onClick={e => handleToggleCompleted(song, e)}
+                            className={`btn btn-ghost btn-xs ${song.completed ? 'text-warning' : 'text-success'}`}
+                            title={song.completed ? 'Mark Incomplete' : 'Mark Complete'}
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              {song.completed ? (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                              ) : (
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              )}
+                            </svg>
+                          </button>
+                          <button
+                            onClick={e => handleDuplicateSong(song, e)}
+                            className="btn btn-ghost btn-xs text-primary"
+                            title="Duplicate Song"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={e => handleDeleteSong(song._id, e)}
                             className="btn btn-ghost btn-xs text-error"
                             title="Delete"
                           >
@@ -427,11 +746,62 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs md:text-sm text-base-content/60">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Updated: {new Date(song.updated_at).toLocaleDateString()}
+                  <div className="flex items-center gap-3 text-xs md:text-sm text-base-content/60 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Updated: {new Date(song.updated_at).toLocaleDateString()}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* SoundCloud Reference indicator */}
+                      <div
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md ${
+                          song.soundcloud_url
+                            ? 'bg-orange-100 text-orange-700 border border-orange-200'
+                            : 'bg-base-200 text-base-content/40 border border-base-300'
+                        }`}
+                        title={song.soundcloud_url ? 'Reference track linked' : 'No reference track'}
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.27-2.154c-.008-.058-.048-.1-.084-.1zm1.09-1.39c-.054 0-.098.044-.105.1l-.21 3.544.21 3.35c.007.057.051.096.105.096.053 0 .096-.039.105-.096l.24-3.35-.24-3.544c-.009-.056-.052-.1-.105-.1zm1.143-.19c-.053 0-.1.044-.107.1l-.212 3.735.212 3.35c.007.055.054.097.107.097.052 0 .098-.042.107-.097l.24-3.35-.24-3.735c-.009-.056-.055-.1-.107-.1zm1.115.427c-.063 0-.107.047-.115.1l-.19 3.407.19 3.35c.008.054.052.097.115.097.062 0 .106-.043.115-.097l.215-3.35-.215-3.407c-.009-.053-.053-.1-.115-.1zm1.18-.48c-.062 0-.11.047-.117.1l-.172 3.888.172 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.194-3.35-.194-3.888c-.009-.053-.056-.1-.117-.1zm1.18-.664c-.062 0-.11.047-.117.1l-.157 4.552.157 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.178-3.35-.178-4.552c-.009-.053-.056-.1-.117-.1zm1.227-.87c-.069 0-.12.052-.127.11l-.136 5.422.136 3.35c.007.058.058.1.127.1.068 0 .118-.042.127-.1l.154-3.35-.154-5.422c-.009-.058-.059-.11-.127-.11zm1.2-.52c-.07 0-.12.052-.127.11l-.12 5.942.12 3.35c.007.058.057.1.127.1.069 0 .12-.042.127-.1l.135-3.35-.135-5.942c-.007-.058-.058-.11-.127-.11zm1.227-.39c-.077 0-.13.057-.137.12l-.103 6.332.103 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.117-3.35-.117-6.332c-.009-.063-.06-.12-.137-.12zm1.227-.18c-.077 0-.13.057-.137.12l-.088 6.512.088 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.1-3.35-.1-6.512c-.009-.063-.06-.12-.137-.12zm4.797-.142c-.246 0-.483.025-.715.069-.147-1.606-1.505-2.87-3.163-2.87-.391 0-.768.072-1.119.204-.126.047-.162.093-.162.185v8.4c0 .097.07.177.166.19l5.008.003c1.38 0 2.5-1.068 2.5-2.387 0-1.32-1.12-2.394-2.5-2.394z"/>
+                        </svg>
+                        <span className="text-xs font-medium">Ref</span>
+                        {song.soundcloud_url && (
+                          <button
+                            onClick={(e) => handlePlayReference(song, e)}
+                            className={`p-0.5 rounded transition-colors ${
+                              playingSongId === song._id && isPlaying
+                                ? 'bg-orange-300 text-orange-900'
+                                : 'hover:bg-orange-200'
+                            }`}
+                            title={playingSongId === song._id && isPlaying ? 'Pause' : 'Play reference'}
+                          >
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              {playingSongId === song._id && isPlaying ? (
+                                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                              ) : (
+                                <path d="M8 5v14l11-7z"/>
+                              )}
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      {/* Instrumental indicator */}
+                      <div
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md ${
+                          song.instrumental_url
+                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                            : 'bg-base-200 text-base-content/40 border border-base-300'
+                        }`}
+                        title={song.instrumental_url ? 'Instrumental track linked' : 'No instrumental track'}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                        </svg>
+                        <span className="text-xs font-medium">Inst</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -439,7 +809,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
           ))}
         </div>
       )}
-      
+
       {/* Create Modal */}
       {showCreateModal && (
         <div className="modal modal-open">
@@ -477,6 +847,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

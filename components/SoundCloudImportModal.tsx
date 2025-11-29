@@ -2,8 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserBands, supabase, Band } from '@/lib/supabase';
 import { SoundCloudTrackInfo, SoundCloudPlaylistInfo } from '@/lib/soundcloud';
+
+type Band = {
+  _id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
 
 interface Props {
   isOpen: boolean;
@@ -34,8 +41,15 @@ export default function SoundCloudImportModal({ isOpen, onClose }: Props) {
 
   const loadBands = async () => {
     if (!user?.id) return;
-    const userBands = await getUserBands(user.id);
-    setBands(userBands);
+    try {
+      const response = await fetch('/api/bands');
+      if (response.ok) {
+        const userBands = await response.json();
+        setBands(userBands);
+      }
+    } catch (error) {
+      console.error('Error loading bands:', error);
+    }
   };
 
   const handleSearch = async () => {
@@ -157,21 +171,28 @@ export default function SoundCloudImportModal({ isOpen, onClose }: Props) {
 
     setImporting(true);
     try {
-      const band = bands.find(b => b.id === selectedBand);
+      const band = bands.find(b => b._id === selectedBand);
       if (!band) {
         alert('Selected band not found');
         return;
       }
 
       for (const track of tracks) {
-        await supabase.from('songs').insert({
-          title: track.title,
-          artist: track.artist || band.name,
-          band_id: selectedBand,
-          user_id: user.id,
-          soundcloud_url: track.url || track.permalink_url,
-          completed: false,
+        const response = await fetch('/api/songs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: track.title,
+            artist: track.artist || band.name,
+            band_id: selectedBand,
+            soundcloud_url: track.url || track.permalink_url,
+            completed: false,
+          }),
         });
+
+        if (!response.ok) {
+          console.error('Failed to import track:', track.title);
+        }
       }
 
       alert(`Successfully imported ${tracks.length} track${tracks.length !== 1 ? 's' : ''}!`);
@@ -349,7 +370,7 @@ export default function SoundCloudImportModal({ isOpen, onClose }: Props) {
                     >
                       <option value="">Select a band</option>
                       {bands.map(band => (
-                        <option key={band.id} value={band.id}>{band.name}</option>
+                        <option key={band._id} value={band._id}>{band.name}</option>
                       ))}
                     </select>
                   </div>

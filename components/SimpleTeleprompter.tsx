@@ -1,7 +1,34 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Song, LyricLine, supabase } from '@/lib/supabase';
+
+type Song = {
+  _id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  folder: string | null;
+  tags: string[];
+  soundcloud_url: string | null;
+  instrumental_url: string | null;
+  completed: boolean;
+  band_id: string | null;
+  album_id: string | null;
+  folder_id: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type LyricLine = {
+  _id: string;
+  song_id: string;
+  line_number: number;
+  text: string;
+  timestamp_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
 
 interface Props {
   song: Song | null;
@@ -79,22 +106,28 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
   const startPracticeSession = async () => {
     if (!song) return;
 
-    const { data, error } = await supabase
-      .from('practice_sessions')
-      .insert({
-        song_id: song.id,
-      })
-      .select()
-      .single();
+    try {
+      const response = await fetch('/api/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'session',
+          songId: song._id,
+        }),
+      });
 
-    if (error) {
+      if (!response.ok) {
+        console.error('Error starting practice session');
+        return;
+      }
+
+      const data = await response.json();
+      if (data) {
+        setSessionId(data._id);
+        sessionStartTimeRef.current = Date.now();
+      }
+    } catch (error) {
       console.error('Error starting practice session:', error);
-      return;
-    }
-
-    if (data) {
-      setSessionId(data.id);
-      sessionStartTimeRef.current = Date.now();
     }
   };
 
@@ -105,13 +138,19 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
       ? Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
       : 0;
 
-    await supabase
-      .from('practice_sessions')
-      .update({
-        ended_at: new Date().toISOString(),
-        duration_seconds: duration,
-      })
-      .eq('id', sessionId);
+    try {
+      await fetch('/api/practice', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          ended_at: new Date().toISOString(),
+          duration_seconds: duration,
+        }),
+      });
+    } catch (error) {
+      console.error('Error ending practice session:', error);
+    }
 
     setSessionId(null);
     sessionStartTimeRef.current = null;
@@ -119,18 +158,28 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
 
   const recordLineTake = async () => {
     if (!sessionId || currentLineIndex < 0 || currentLineIndex >= lyrics.length) return;
-    
+
     const currentLine = lyrics[currentLineIndex];
-    const currentCount = lineTakeCounts[currentLine.id] || 0;
+    const currentCount = lineTakeCounts[currentLine._id] || 0;
     const newCount = currentCount + 1;
 
-    setLineTakeCounts(prev => ({ ...prev, [currentLine.id]: newCount }));
+    setLineTakeCounts(prev => ({ ...prev, [currentLine._id]: newCount }));
 
-    await supabase.from('line_takes').insert({
-      lyric_line_id: currentLine.id,
-      session_id: sessionId,
-      take_number: newCount,
-    });
+    try {
+      await fetch('/api/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'take',
+          songId: currentLine.song_id,
+          lyric_line_id: currentLine._id,
+          session_id: sessionId,
+          take_number: newCount,
+        }),
+      });
+    } catch (error) {
+      console.error('Error recording line take:', error);
+    }
   };
 
   const togglePlayPause = () => {
@@ -345,12 +394,12 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
         <div className="w-full max-w-4xl">
           {getVisibleLines().map((line) => (
             <div
-              key={line.id}
+              key={line._id}
               className={`transition-all duration-500 py-2 ${
-                line.isActive 
-                  ? 'text-white opacity-100 scale-105' 
-                  : line.isPrevious 
-                    ? 'text-gray-400 opacity-60' 
+                line.isActive
+                  ? 'text-white opacity-100 scale-105'
+                  : line.isPrevious
+                    ? 'text-gray-400 opacity-60'
                     : 'text-gray-500 opacity-40'
               }`}
               style={{
@@ -361,9 +410,9 @@ export default function SimpleTeleprompter({ song, lyrics, onBack, showBackButto
             >
               <span className="inline-block">
                 {line.text}
-                {lineTakeCounts[line.id] > 0 && (
+                {lineTakeCounts[line._id] > 0 && (
                   <span className="ml-2 px-2 py-1 bg-success text-success-content text-xs font-bold" style={{borderRadius: '4px'}}>
-                    {lineTakeCounts[line.id]}
+                    {lineTakeCounts[line._id]}
                   </span>
                 )}
               </span>

@@ -1,8 +1,68 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase, Song, LyricLine, Band, Album, Folder, getUserBands, getBandAlbums, getBandFolders, createAlbum, createFolder } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+
+type Song = {
+  _id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  folder: string | null;
+  tags: string[];
+  soundcloud_url: string | null;
+  instrumental_url: string | null;
+  completed: boolean;
+  band_id: string | null;
+  album_id: string | null;
+  folder_id: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type LyricLine = {
+  _id: string;
+  song_id: string;
+  line_number: number;
+  text: string;
+  timestamp_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type Band = {
+  _id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type Album = {
+  _id: string;
+  band_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type Folder = {
+  _id: string;
+  band_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type TagConfig = {
+  _id: string;
+  user_id: string;
+  tag_name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+};
 
 interface Props {
   song: Song | null;
@@ -21,34 +81,79 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   const [folder, setFolder] = useState<string>('');
   const [completed, setCompleted] = useState<boolean>(false);
   const [tags, setTags] = useState<string[]>([]);
-  const [newTag, setNewTag] = useState<string>('');
   const [soundcloudUrl, setSoundcloudUrl] = useState<string>('');
   const [instrumentalUrl, setInstrumentalUrl] = useState<string>('');
   const [rawLyrics, setRawLyrics] = useState<string>('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [smartProcessing, setSmartProcessing] = useState(false);
+  const [showProcessSuggestion, setShowProcessSuggestion] = useState(false);
+  const [processSuggestionReason, setProcessSuggestionReason] = useState<string>('');
   const [saving, setSaving] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [availableFolders, setAvailableFolders] = useState<Folder[]>([]);
   const [availableAlbums, setAvailableAlbums] = useState<Album[]>([]);
-  
+
+  // Create modals
+  const [showCreateAlbumModal, setShowCreateAlbumModal] = useState(false);
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [showCreateTagModal, setShowCreateTagModal] = useState(false);
+  const [newAlbumName, setNewAlbumName] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newTagName, setNewTagName] = useState('');
+  const [newTagColor, setNewTagColor] = useState('purple');
+  const [creatingAlbum, setCreatingAlbum] = useState(false);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [creatingTag, setCreatingTag] = useState(false);
+
+  // Tag configs
+  const [availableTagConfigs, setAvailableTagConfigs] = useState<TagConfig[]>([]);
+
   // Change tracking
   const [hasChanges, setHasChanges] = useState(false);
   const [originalData, setOriginalData] = useState<any>(null);
-  
+  const [originalLyricsText, setOriginalLyricsText] = useState<string>('');
+  const [editedLineIndices, setEditedLineIndices] = useState<Set<number>>(new Set());
+
+  // Collapsible lyric lines
+  const [lyricsCollapsed, setLyricsCollapsed] = useState(false);
+
   // Drag and drop state
   const [draggedLine, setDraggedLine] = useState<LyricLine | null>(null);
 
   const defaultTags = ['confident', 'needs practice'];
+  const tagColors = ['purple', 'blue', 'green', 'red', 'orange', 'pink', 'cyan', 'yellow'];
 
-  // Load bands on mount
+  // Load bands and tag configs on mount
   useEffect(() => {
     loadBands();
+    loadTagConfigs();
   }, [user]);
 
   const loadBands = async () => {
     if (user?.id) {
-      const bands = await getUserBands(user.id);
-      setAvailableBands(bands);
+      try {
+        const response = await fetch('/api/bands');
+        if (response.ok) {
+          const bands = await response.json();
+          setAvailableBands(bands);
+        }
+      } catch (error) {
+        console.error('Error loading bands:', error);
+      }
+    }
+  };
+
+  const loadTagConfigs = async () => {
+    if (user?.id) {
+      try {
+        const response = await fetch('/api/tags');
+        if (response.ok) {
+          const configs = await response.json();
+          setAvailableTagConfigs(configs);
+        }
+      } catch (error) {
+        console.error('Error loading tag configs:', error);
+      }
     }
   };
 
@@ -63,10 +168,124 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   }, [selectedBandId]);
 
   const loadBandData = async (bandId: string) => {
-    const albums = await getBandAlbums(bandId);
-    const folders = await getBandFolders(bandId);
-    setAvailableAlbums(albums);
-    setAvailableFolders(folders);
+    try {
+      const [albumsRes, foldersRes] = await Promise.all([
+        fetch(`/api/albums?bandId=${bandId}`),
+        fetch(`/api/folders?bandId=${bandId}`)
+      ]);
+
+      if (albumsRes.ok) {
+        const albums = await albumsRes.json();
+        setAvailableAlbums(albums);
+      }
+
+      if (foldersRes.ok) {
+        const folders = await foldersRes.json();
+        setAvailableFolders(folders);
+      }
+    } catch (error) {
+      console.error('Error loading band data:', error);
+    }
+  };
+
+  const handleCreateAlbum = async () => {
+    if (!newAlbumName.trim() || !selectedBandId) return;
+
+    setCreatingAlbum(true);
+    try {
+      const response = await fetch('/api/albums', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bandId: selectedBandId,
+          name: newAlbumName.trim()
+        })
+      });
+
+      if (response.ok) {
+        const newAlbum = await response.json();
+        setAvailableAlbums(prev => [...prev, newAlbum]);
+        setAlbum(newAlbum._id);
+        setShowCreateAlbumModal(false);
+        setNewAlbumName('');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to create album');
+      }
+    } catch (error) {
+      console.error('Error creating album:', error);
+      alert('Failed to create album');
+    } finally {
+      setCreatingAlbum(false);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim() || !selectedBandId) return;
+
+    setCreatingFolder(true);
+    try {
+      const response = await fetch('/api/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bandId: selectedBandId,
+          name: newFolderName.trim()
+        })
+      });
+
+      if (response.ok) {
+        const newFolder = await response.json();
+        setAvailableFolders(prev => [...prev, newFolder]);
+        setFolder(newFolder._id);
+        setShowCreateFolderModal(false);
+        setNewFolderName('');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to create folder');
+      }
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      alert('Failed to create folder');
+    } finally {
+      setCreatingFolder(false);
+    }
+  };
+
+  const handleCreateTag = async () => {
+    if (!newTagName.trim()) return;
+
+    setCreatingTag(true);
+    try {
+      const response = await fetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tag_name: newTagName.trim(),
+          color: newTagColor
+        })
+      });
+
+      if (response.ok) {
+        const newTag = await response.json();
+        setAvailableTagConfigs(prev => [...prev, newTag]);
+        // Also add the tag to the current song's tags
+        if (!tags.includes(newTag.tag_name)) {
+          setTags([...tags, newTag.tag_name]);
+        }
+        setShowCreateTagModal(false);
+        setNewTagName('');
+        setNewTagColor('purple');
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to create tag');
+      }
+    } catch (error) {
+      console.error('Error creating tag:', error);
+      alert('Failed to create tag');
+    } finally {
+      setCreatingTag(false);
+    }
   };
 
   useEffect(() => {
@@ -114,15 +333,14 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       setOriginalData(data);
     }
 
-    if (lyrics.length > 0) {
-      const lyricsText = lyrics.map(l => l.text).join('\n');
-      setRawLyrics(lyricsText);
-    } else {
-      setRawLyrics('');
-    }
-    
+    const lyricsText = lyrics.length > 0 ? lyrics.map(l => l.text).join('\n') : '';
+    setRawLyrics(lyricsText);
+    setOriginalLyricsText(lyricsText);
+    setEditedLineIndices(new Set());
+    setLyricsCollapsed(false);
+
     setHasChanges(false);
-  }, [song, lyrics]);
+  }, [song?._id]); // Only reset when song ID changes, not on every lyrics update
 
   // Track changes
   useEffect(() => {
@@ -140,11 +358,96 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     };
 
     const hasFormChanges = JSON.stringify(currentData) !== JSON.stringify(originalData);
-    const hasLyricChanges = rawLyrics !== (lyrics.length > 0 ? lyrics.map(l => l.text).join('\n') : '');
+
+    // Check lyrics changes - compare current lyrics text with original
+    const currentLyricsText = lyrics.length > 0 ? lyrics.map(l => l.text).join('\n') : rawLyrics;
+    const hasLyricChanges = currentLyricsText !== originalLyricsText;
 
     setHasChanges(hasFormChanges || hasLyricChanges);
-  }, [title, selectedBandId, album, folder, completed, tags, soundcloudUrl, instrumentalUrl, rawLyrics, originalData, lyrics]);
+  }, [title, selectedBandId, album, folder, completed, tags, soundcloudUrl, instrumentalUrl, rawLyrics, originalData, lyrics, originalLyricsText]);
 
+
+  // Check if lyrics need processing when they change significantly
+  const checkIfNeedsProcessing = async (text: string) => {
+    if (!text || text.trim().length < 50) {
+      setShowProcessSuggestion(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/lyrics/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lyrics: text, mode: 'check' }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.needsProcessing) {
+          setShowProcessSuggestion(true);
+          setProcessSuggestionReason(data.reason || 'Lyrics may benefit from AI formatting');
+        } else {
+          setShowProcessSuggestion(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking lyrics:', error);
+    }
+  };
+
+  // Handle paste event for auto-detection
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = e.clipboardData.getData('text');
+    // Check after a short delay to allow the state to update
+    setTimeout(() => {
+      checkIfNeedsProcessing(pastedText);
+    }, 100);
+  };
+
+  // Smart AI processing with enhanced analysis
+  const handleSmartProcess = async () => {
+    if (!rawLyrics.trim()) {
+      alert('Please enter lyrics first');
+      return;
+    }
+
+    setSmartProcessing(true);
+    try {
+      const response = await fetch('/api/lyrics/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lyrics: rawLyrics,
+          mode: 'full',
+          options: {
+            maxLineLength: 60,
+            addSectionMarkers: true,
+            optimizeForTeleprompter: true,
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.formattedLyrics) {
+        setRawLyrics(data.formattedLyrics);
+        setShowProcessSuggestion(false);
+
+        // Show processing stats
+        const stats = data.processed?.metadata;
+        if (stats) {
+          alert(`Lyrics processed!\n• ${stats.totalLines} lines\n• Average ${stats.averageLineLength} chars/line\n• Structure detected: ${stats.hasExistingStructure ? 'Yes' : 'Added'}`);
+        } else {
+          alert('Lyrics processed with AI!');
+        }
+      }
+    } catch (error) {
+      console.error('Error processing lyrics:', error);
+      alert('Error processing lyrics');
+    } finally {
+      setSmartProcessing(false);
+    }
+  };
 
   // Drag and drop functions
   const handleDragStart = (e: React.DragEvent, line: LyricLine) => {
@@ -159,11 +462,11 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
   const handleDrop = (e: React.DragEvent, targetLine: LyricLine) => {
     e.preventDefault();
-    if (!draggedLine || draggedLine.id === targetLine.id) return;
+    if (!draggedLine || draggedLine._id === targetLine._id) return;
 
     const newLyrics = [...lyrics];
-    const draggedIndex = newLyrics.findIndex(l => l.id === draggedLine.id);
-    const targetIndex = newLyrics.findIndex(l => l.id === targetLine.id);
+    const draggedIndex = newLyrics.findIndex(l => l._id === draggedLine._id);
+    const targetIndex = newLyrics.findIndex(l => l._id === targetLine._id);
 
     // Remove dragged item and insert at target position
     const [removed] = newLyrics.splice(draggedIndex, 1);
@@ -239,8 +542,8 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       .filter(line => line.length > 0);
 
     const newLyrics: LyricLine[] = lines.map((text, index) => ({
-      id: crypto.randomUUID(),
-      song_id: song?.id || '',
+      _id: crypto.randomUUID(),
+      song_id: song?._id || '',
       line_number: index,
       text,
       timestamp_ms: null,
@@ -274,76 +577,103 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
     setSaving(true);
     try {
-      let songId = song?.id;
+      let songId = song?._id;
 
-      const selectedBand = availableBands.find(b => b.id === selectedBandId);
+      const selectedBand = availableBands.find(b => b._id === selectedBandId);
       if (!selectedBand) {
         alert('Selected band not found');
         return;
       }
 
+      const selectedFolder = availableFolders.find(f => f._id === folder);
+      const selectedAlbum = availableAlbums.find(a => a._id === album);
+
+      const songData = {
+        title,
+        artist: selectedBand.name,
+        album: selectedAlbum?.name || null,
+        folder: selectedFolder?.name || null,
+        band_id: selectedBandId,
+        album_id: album || null,
+        folder_id: folder || null,
+        completed,
+        tags,
+        soundcloud_url: soundcloudUrl || null,
+        instrumental_url: instrumentalUrl || null,
+      };
+
       if (song) {
-        const { error } = await supabase
-          .from('songs')
-          .update({
-            title,
-            artist: selectedBand.name,
-            album: album || null,
-            folder: folder || null,
-            band_id: selectedBandId,
-            album_id: album || null,
-            folder_id: folder || null,
-            user_id: user.id,
-            completed,
-            tags,
-            soundcloud_url: soundcloudUrl || null,
-            instrumental_url: instrumentalUrl || null,
-          })
-          .eq('id', song.id);
+        // Update existing song
+        const updatePayload = { id: song._id, ...songData };
+        console.log('Updating song with payload:', updatePayload);
 
-        if (error) throw error;
+        const response = await fetch('/api/songs', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatePayload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Update song error:', response.status, errorData);
+          throw new Error(errorData.error || 'Failed to update song');
+        }
       } else {
-        const { data, error } = await supabase
-          .from('songs')
-          .insert({
-            title,
-            artist: selectedBand.name,
-            album: album || null,
-            folder: folder || null,
-            band_id: selectedBandId,
-            album_id: album || null,
-            folder_id: folder || null,
-            user_id: user.id,
-            completed,
-            tags,
-            soundcloud_url: soundcloudUrl || null,
-            instrumental_url: instrumentalUrl || null,
-          })
-          .select()
-          .single();
+        // Create new song
+        const response = await fetch('/api/songs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(songData),
+        });
 
-        if (error) throw error;
-        songId = data.id;
-        onSongChange(data);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Create song error:', response.status, errorData);
+          throw new Error(errorData.error || 'Failed to create song');
+        }
+
+        const newSong = await response.json();
+        songId = newSong._id;
+        onSongChange(newSong);
       }
 
-      await supabase.from('lyric_lines').delete().eq('song_id', songId);
-
+      // Save lyrics
       const lyricLines = lyrics.map((line, index) => ({
-        song_id: songId,
         line_number: index,
         text: line.text,
         timestamp_ms: line.timestamp_ms,
       }));
 
-      const { error: lyricsError } = await supabase.from('lyric_lines').insert(lyricLines);
+      const lyricsResponse = await fetch('/api/lyrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songId, lines: lyricLines }),
+      });
 
-      if (lyricsError) throw lyricsError;
+      if (!lyricsResponse.ok) throw new Error('Failed to save lyrics');
+
+      // Update original data to reflect saved state
+      setOriginalData({
+        title,
+        selectedBandId,
+        album,
+        folder,
+        completed,
+        tags,
+        soundcloudUrl,
+        instrumentalUrl
+      });
+      // Also update the original lyrics text to reflect saved state
+      const savedLyricsText = lyrics.map(l => l.text).join('\n');
+      setOriginalLyricsText(savedLyricsText);
+      setEditedLineIndices(new Set());
+      setHasChanges(false);
 
       alert('Song saved successfully!');
     } catch (error) {
       console.error('Error saving song:', error);
-      alert('Error saving song');
+      const errorMessage = error instanceof Error ? error.message : 'Error saving song';
+      alert(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -353,6 +683,9 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     const updatedLyrics = [...lyrics];
     updatedLyrics[index] = { ...updatedLyrics[index], text: newText };
     onLyricsChange(updatedLyrics);
+
+    // Track this line as edited
+    setEditedLineIndices(prev => new Set(prev).add(index));
   };
 
   const deleteLyricLine = (index: number) => {
@@ -362,8 +695,8 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
   const addLineAfter = (index: number) => {
     const newLine: LyricLine = {
-      id: crypto.randomUUID(),
-      song_id: song?.id || '',
+      _id: crypto.randomUUID(),
+      song_id: song?._id || '',
       line_number: index + 1,
       text: '',
       timestamp_ms: null,
@@ -384,18 +717,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     if (tag.trim() && !tags.includes(tag.trim())) {
       setTags([...tags, tag.trim()]);
     }
-    setNewTag('');
   };
 
   const removeTag = (tagToRemove: string) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
-  };
-
-  const handleNewTagKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addTag(newTag);
-    }
   };
 
   return (
@@ -466,7 +791,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                 >
                   <option value="">Select a band</option>
                   {availableBands.map(band => (
-                    <option key={band.id} value={band.id}>{band.name}</option>
+                    <option key={band._id} value={band._id}>{band.name}</option>
                   ))}
                 </select>
                 {availableBands.length === 0 && (
@@ -480,17 +805,30 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   </svg>
                   Album
                 </label>
-                <select
-                  value={album}
-                  onChange={e => setAlbum(e.target.value)}
-                  className="select select-bordered w-full"
-                  disabled={!selectedBandId}
-                >
-                  <option value="">No Album</option>
-                  {availableAlbums.map(albumOption => (
-                    <option key={albumOption.id} value={albumOption.id}>{albumOption.name}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={album}
+                    onChange={e => setAlbum(e.target.value)}
+                    className="select select-bordered flex-1"
+                    disabled={!selectedBandId}
+                  >
+                    <option value="">No Album</option>
+                    {availableAlbums.map(albumOption => (
+                      <option key={albumOption._id} value={albumOption._id}>{albumOption.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateAlbumModal(true)}
+                    disabled={!selectedBandId}
+                    className="btn btn-square btn-ghost text-primary disabled:text-base-content/30"
+                    title={selectedBandId ? 'Create New Album' : 'Select a band first'}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
                 {!selectedBandId && (
                   <p className="text-xs text-base-content/60 mt-1">Select a band first</p>
                 )}
@@ -502,17 +840,30 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   </svg>
                   Folder
                 </label>
-                <select
-                  value={folder}
-                  onChange={e => setFolder(e.target.value)}
-                  className="select select-bordered w-full"
-                  disabled={!selectedBandId}
-                >
-                  <option value="">No Folder</option>
-                  {availableFolders.map(folderOption => (
-                    <option key={folderOption.id} value={folderOption.id}>{folderOption.name}</option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={folder}
+                    onChange={e => setFolder(e.target.value)}
+                    className="select select-bordered flex-1"
+                    disabled={!selectedBandId}
+                  >
+                    <option value="">No Folder</option>
+                    {availableFolders.map(folderOption => (
+                      <option key={folderOption._id} value={folderOption._id}>{folderOption.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateFolderModal(true)}
+                    disabled={!selectedBandId}
+                    className="btn btn-square btn-ghost text-primary disabled:text-base-content/30"
+                    title={selectedBandId ? 'Create New Folder' : 'Select a band first'}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
                 {!selectedBandId && (
                   <p className="text-xs text-base-content/60 mt-1">Select a band first</p>
                 )}
@@ -526,6 +877,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   Tags
                 </label>
                 <div className="space-y-3">
+                  {/* Default Tags */}
                   <div className="flex flex-wrap gap-2">
                     {defaultTags.map(tag => (
                       <button
@@ -542,44 +894,74 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                       </button>
                     ))}
                   </div>
-                  {tags.length > 0 && (
+                  {/* User-configured Tags */}
+                  {availableTagConfigs.length > 0 && (
                     <div className="flex flex-wrap gap-2">
-                      {tags.filter(tag => !defaultTags.includes(tag)).map(tag => (
-                        <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg border border-purple-300">
-                          {tag}
+                      {availableTagConfigs.map(config => {
+                        const isSelected = tags.includes(config.tag_name);
+                        const colorClasses: Record<string, { bg: string; text: string; border: string }> = {
+                          purple: { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-300' },
+                          blue: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300' },
+                          green: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300' },
+                          red: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300' },
+                          orange: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300' },
+                          pink: { bg: 'bg-pink-100', text: 'text-pink-700', border: 'border-pink-300' },
+                          cyan: { bg: 'bg-cyan-100', text: 'text-cyan-700', border: 'border-cyan-300' },
+                          yellow: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300' },
+                        };
+                        const colors = colorClasses[config.color] || colorClasses.purple;
+                        return (
                           <button
+                            key={config._id}
                             type="button"
-                            onClick={() => removeTag(tag)}
-                            className="group ml-1 p-0.5 rounded-sm transition-colors"
+                            onClick={() => isSelected ? removeTag(config.tag_name) : addTag(config.tag_name)}
+                            className={`px-3 py-1 text-xs font-semibold rounded-lg border transition-all duration-300 ${
+                              isSelected
+                                ? `${colors.bg} ${colors.text} ${colors.border} scale-105`
+                                : 'bg-base-200 text-base-content border-base-300 hover:text-primary hover:border-primary'
+                            }`}
                           >
-                            <svg className="w-3 h-3 text-purple-500 group-hover:text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
+                            {isSelected && '✓ '}{config.tag_name}
                           </button>
-                        </span>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newTag}
-                      onChange={e => setNewTag(e.target.value)}
-                      onKeyDown={handleNewTagKeyPress}
-                      placeholder="Add custom tag..."
-                      className="flex-1 px-3 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-sm transition-all duration-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => addTag(newTag)}
-                      disabled={!newTag.trim() || tags.includes(newTag.trim())}
-                      className="group px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
-                    >
-                      <svg className="w-5 h-5 text-base-content/50 group-hover:text-purple-400 group-hover:scale-110 transition-all duration-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-                  </div>
+                  {/* Add custom tags that aren't in defaults or configs */}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {tags
+                        .filter(tag =>
+                          !defaultTags.includes(tag) &&
+                          !availableTagConfigs.some(c => c.tag_name === tag)
+                        )
+                        .map(tag => (
+                          <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg border border-purple-300">
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => removeTag(tag)}
+                              className="group ml-1 p-0.5 rounded-sm transition-colors"
+                            >
+                              <svg className="w-3 h-3 text-purple-500 group-hover:text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        ))}
+                    </div>
+                  )}
+                  {/* Create new tag button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateTagModal(true)}
+                    className="btn btn-sm btn-outline btn-primary gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Create New Tag
+                  </button>
                 </div>
               </div>
               <div>
@@ -628,17 +1010,85 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           <textarea
             value={rawLyrics}
             onChange={e => setRawLyrics(e.target.value)}
+            onPaste={handlePaste}
             className="w-full h-48 md:h-64 px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono text-sm md:text-base transition-all duration-300"
             placeholder="Paste your lyrics here..."
           />
-          <div className="flex gap-2 mt-4">
+          {showProcessSuggestion && (
+            <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center gap-3">
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-purple-800">AI Processing Recommended</p>
+                <p className="text-xs text-purple-600">{processSuggestionReason}</p>
+              </div>
+              <button
+                onClick={handleSmartProcess}
+                disabled={smartProcessing}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                {smartProcessing ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                      <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                    </svg>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Smart Process
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setShowProcessSuggestion(false)}
+                className="p-1 text-purple-400 hover:text-purple-600 transition-colors"
+                title="Dismiss"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+          <div className="flex gap-2 mt-4 items-center">
+            <button
+              onClick={handleSmartProcess}
+              disabled={smartProcessing}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                smartProcessing
+                  ? 'bg-purple-100 text-purple-400'
+                  : 'bg-purple-600 text-white hover:bg-purple-700'
+              }`}
+              title={smartProcessing ? 'Processing...' : 'Smart AI Process - Analyzes structure, adds sections, optimizes for teleprompter'}
+            >
+              {smartProcessing ? (
+                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              )}
+              <span className="text-sm font-medium">{smartProcessing ? 'Processing...' : 'Smart Process'}</span>
+            </button>
+            <div className="h-6 w-px bg-base-300" />
             <button
               onClick={handleAIFormat}
               disabled={aiLoading}
               className={`p-2 transition-all duration-200 ${
                 aiLoading ? 'text-base-content/30' : 'text-base-content/70 hover:text-purple-600'
               }`}
-              title={aiLoading ? 'Formatting...' : 'AI Format'}
+              title={aiLoading ? 'Formatting...' : 'Quick AI Format'}
             >
               {aiLoading ? (
                 <svg className="w-7 h-7 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -664,15 +1114,33 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       ) : (
         <div>
           <div className="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-2">
-            <label className="text-xs md:text-sm font-semibold text-base-content flex items-center gap-2">
+            <button
+              onClick={() => setLyricsCollapsed(!lyricsCollapsed)}
+              className="flex items-center gap-2 text-xs md:text-sm font-semibold text-base-content hover:text-primary transition-colors"
+            >
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${lyricsCollapsed ? '' : 'rotate-90'}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
               <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
               Lyric Lines ({lyrics.length})
-            </label>
+              {editedLineIndices.size > 0 && (
+                <span className="ml-2 px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-full">
+                  {editedLineIndices.size} edited
+                </span>
+              )}
+            </button>
             <button
               onClick={() => {
                 onLyricsChange([]);
+                setEditedLineIndices(new Set());
               }}
               className="p-1 text-base-content/50 hover:text-red-600 transition-all duration-200"
               title="Reset & Re-import"
@@ -682,54 +1150,68 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
               </svg>
             </button>
           </div>
-          <div className="space-y-2">
-            {lyrics.map((line, index) => (
-              <div
-                key={line.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, line)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, line)}
-                className={`flex gap-1 md:gap-2 items-center group p-2 transition-all duration-200 cursor-grab active:cursor-grabbing ${
-                  draggedLine?.id === line.id ? 'opacity-50' : ''
-                }`}
-                style={{borderRadius: '4px'}}
-              >
-                {/* Drag handle */}
-                <div className="p-1 text-base-content/40 hover:text-base-content/60 cursor-grab">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-                  </svg>
-                </div>
-                <span className="text-base-content/60 font-mono text-xs md:text-sm w-6 md:w-8 bg-base-200 px-2 py-1 border border-base-300" style={{borderRadius: '4px'}}>{index + 1}</span>
-                <input
-                  type="text"
-                  value={line.text}
-                  onChange={e => updateLyricLine(index, e.target.value)}
-                  className="flex-1 px-2 md:px-3 py-1 md:py-2 bg-base-100 border border-base-300 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-xs md:text-base transition-all duration-300"
+          {!lyricsCollapsed && (
+            <div className="space-y-2">
+              {lyrics.map((line, index) => (
+                <div
+                  key={line._id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, line)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, line)}
+                  className={`flex gap-1 md:gap-2 items-center group p-2 transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                    draggedLine?._id === line._id ? 'opacity-50' : ''
+                  }`}
                   style={{borderRadius: '4px'}}
-                />
-                <button
-                  onClick={() => addLineAfter(index)}
-                  className="p-1 text-base-content/50 hover:text-green-600 transition-all duration-200"
-                  title="Add line after"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => deleteLyricLine(index)}
-                  className="p-1 text-base-content/50 hover:text-red-600 transition-all duration-200"
-                  title="Delete line"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
+                  {/* Drag handle */}
+                  <div className="p-1 text-base-content/40 hover:text-base-content/60 cursor-grab">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                    </svg>
+                  </div>
+                  <span
+                    className={`font-mono text-xs md:text-sm w-6 md:w-8 px-2 py-1 border text-center transition-all duration-200 ${
+                      editedLineIndices.has(index)
+                        ? 'bg-amber-400 text-amber-900 border-amber-500 font-bold shadow-sm shadow-amber-300'
+                        : 'bg-base-200 text-base-content/60 border-base-300'
+                    }`}
+                    style={{borderRadius: '4px'}}
+                    title={editedLineIndices.has(index) ? 'This line has been edited' : ''}
+                  >
+                    {index + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={line.text}
+                    onChange={e => updateLyricLine(index, e.target.value)}
+                    className={`flex-1 px-2 md:px-3 py-1 md:py-2 bg-base-100 border focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-xs md:text-base transition-all duration-300 ${
+                      editedLineIndices.has(index) ? 'border-amber-300' : 'border-base-300'
+                    }`}
+                    style={{borderRadius: '4px'}}
+                  />
+                  <button
+                    onClick={() => addLineAfter(index)}
+                    className="p-1 text-base-content/50 hover:text-green-600 transition-all duration-200"
+                    title="Add line after"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => deleteLyricLine(index)}
+                    className="p-1 text-base-content/50 hover:text-red-600 transition-all duration-200"
+                    title="Delete line"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -777,6 +1259,172 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           )}
         </button>
       </div>
+
+      {/* Create Album Modal */}
+      {showCreateAlbumModal && (
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">Create New Album</h3>
+            <div className="py-4">
+              <input
+                type="text"
+                placeholder="Album name..."
+                value={newAlbumName}
+                onChange={e => setNewAlbumName(e.target.value)}
+                className="input input-bordered w-full"
+                onKeyDown={e => e.key === 'Enter' && handleCreateAlbum()}
+                autoFocus
+              />
+            </div>
+            <div className="modal-action">
+              <button
+                onClick={() => {
+                  setShowCreateAlbumModal(false);
+                  setNewAlbumName('');
+                }}
+                className="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateAlbum}
+                disabled={creatingAlbum || !newAlbumName.trim()}
+                className="btn btn-primary"
+              >
+                {creatingAlbum ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setShowCreateAlbumModal(false)} />
+        </div>
+      )}
+
+      {/* Create Folder Modal */}
+      {showCreateFolderModal && (
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">Create New Folder</h3>
+            <div className="py-4">
+              <input
+                type="text"
+                placeholder="Folder name..."
+                value={newFolderName}
+                onChange={e => setNewFolderName(e.target.value)}
+                className="input input-bordered w-full"
+                onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
+                autoFocus
+              />
+            </div>
+            <div className="modal-action">
+              <button
+                onClick={() => {
+                  setShowCreateFolderModal(false);
+                  setNewFolderName('');
+                }}
+                className="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateFolder}
+                disabled={creatingFolder || !newFolderName.trim()}
+                className="btn btn-primary"
+              >
+                {creatingFolder ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setShowCreateFolderModal(false)} />
+        </div>
+      )}
+
+      {/* Create Tag Modal */}
+      {showCreateTagModal && (
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">Create New Tag</h3>
+            <div className="py-4 space-y-4">
+              <div>
+                <label className="label">
+                  <span className="label-text">Tag Name</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter tag name..."
+                  value={newTagName}
+                  onChange={e => setNewTagName(e.target.value)}
+                  className="input input-bordered w-full"
+                  onKeyDown={e => e.key === 'Enter' && handleCreateTag()}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="label">
+                  <span className="label-text">Tag Color</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {tagColors.map(color => {
+                    const colorBg: Record<string, string> = {
+                      purple: 'bg-purple-500',
+                      blue: 'bg-blue-500',
+                      green: 'bg-green-500',
+                      red: 'bg-red-500',
+                      orange: 'bg-orange-500',
+                      pink: 'bg-pink-500',
+                      cyan: 'bg-cyan-500',
+                      yellow: 'bg-yellow-500',
+                    };
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewTagColor(color)}
+                        className={`w-8 h-8 rounded-full ${colorBg[color]} transition-all ${
+                          newTagColor === color
+                            ? 'ring-2 ring-offset-2 ring-primary scale-110'
+                            : 'hover:scale-105'
+                        }`}
+                        title={color}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Preview */}
+              {newTagName.trim() && (
+                <div>
+                  <label className="label">
+                    <span className="label-text">Preview</span>
+                  </label>
+                  <span className={`px-3 py-1 text-xs font-semibold rounded-lg border bg-${newTagColor}-100 text-${newTagColor}-700 border-${newTagColor}-300`}>
+                    {newTagName.trim()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="modal-action">
+              <button
+                onClick={() => {
+                  setShowCreateTagModal(false);
+                  setNewTagName('');
+                  setNewTagColor('purple');
+                }}
+                className="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateTag}
+                disabled={creatingTag || !newTagName.trim()}
+                className="btn btn-primary"
+              >
+                {creatingTag ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setShowCreateTagModal(false)} />
+        </div>
+      )}
     </div>
   );
 }

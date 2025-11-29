@@ -3,8 +3,24 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { upsertUserSettings, getUserSettings, getUserBands, createBand, Band, supabase, getUserTagConfigs, upsertTagConfig, TagConfig } from '@/lib/supabase';
 import SoundCloudImportModal from './SoundCloudImportModal';
+
+type Band = {
+  _id: string;
+  user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type TagConfig = {
+  _id: string;
+  user_id: string;
+  tag_name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+};
 
 interface Props {
   onBack?: () => void;
@@ -13,7 +29,7 @@ interface Props {
 
 export default function Settings({ onBack, showBackButton = false }: Props) {
   const { theme, setTheme } = useTheme();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [activeSection, setActiveSection] = useState<'personal' | 'bands' | 'tags' | 'integrations' | 'theme'>('personal');
   const [name, setName] = useState('User Name');
   const [email, setEmail] = useState('user@example.com');
@@ -39,11 +55,22 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
     }
 
     if (newBand.trim() && !bands.some(b => b.name === newBand.trim())) {
-      const newBandData = await createBand(user.id, newBand.trim());
-      if (newBandData) {
-        setBands([...bands, newBandData]);
-        setNewBand('');
-      } else {
+      try {
+        const response = await fetch('/api/bands', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newBand.trim() }),
+        });
+
+        if (response.ok) {
+          const newBandData = await response.json();
+          setBands([...bands, newBandData]);
+          setNewBand('');
+        } else {
+          alert('Error creating band. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error creating band:', error);
         alert('Error creating band. Please try again.');
       }
     }
@@ -55,10 +82,18 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
       return;
     }
 
-    const { error } = await supabase.from('bands').delete().eq('id', bandId);
-    if (!error) {
-      setBands(bands.filter(band => band.id !== bandId));
-    } else {
+    try {
+      const response = await fetch(`/api/bands?id=${bandId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setBands(bands.filter(band => band._id !== bandId));
+      } else {
+        console.error('Error deleting band');
+        alert('Error deleting band. Please try again.');
+      }
+    } catch (error) {
       console.error('Error deleting band:', error);
       alert('Error deleting band. Please try again.');
     }
@@ -101,11 +136,21 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
       return;
     }
 
-    const result = await upsertUserSettings(user.id, { name, email, avatar });
-    if (result) {
-      setOriginalPersonalData({ name, email, avatar });
-      alert('Settings saved successfully!');
-    } else {
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, avatar }),
+      });
+
+      if (response.ok) {
+        setOriginalPersonalData({ name, email, avatar });
+        alert('Settings saved successfully!');
+      } else {
+        alert('Error saving settings. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving settings:', error);
       alert('Error saving settings. Please try again.');
     }
   };
@@ -113,22 +158,38 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
   useEffect(() => {
     const loadSettings = async () => {
       if (user?.id) {
-        const settings = await getUserSettings(user.id);
-        if (settings) {
-          const loadedName = settings.name || user.email || 'User Name';
-          const loadedEmail = settings.email || user.email || 'user@example.com';
-          const loadedAvatar = settings.avatar || null;
-          setName(loadedName);
-          setEmail(loadedEmail);
-          setAvatar(loadedAvatar);
-          setOriginalPersonalData({ name: loadedName, email: loadedEmail, avatar: loadedAvatar });
+        try {
+          // Load user settings
+          const settingsResponse = await fetch('/api/settings');
+          if (settingsResponse.ok) {
+            const settings = await settingsResponse.json();
+            if (settings && Object.keys(settings).length > 0) {
+              const loadedName = settings.name || user.email || 'User Name';
+              const loadedEmail = settings.email || user.email || 'user@example.com';
+              const loadedAvatar = settings.avatar || null;
+              setName(loadedName);
+              setEmail(loadedEmail);
+              setAvatar(loadedAvatar);
+              setOriginalPersonalData({ name: loadedName, email: loadedEmail, avatar: loadedAvatar });
+            }
+          }
+
+          // Load bands
+          const bandsResponse = await fetch('/api/bands');
+          if (bandsResponse.ok) {
+            const userBands = await bandsResponse.json();
+            setBands(userBands);
+          }
+
+          // Load tag configs
+          const tagsResponse = await fetch('/api/tags');
+          if (tagsResponse.ok) {
+            const configs = await tagsResponse.json();
+            setTagConfigs(configs);
+          }
+        } catch (error) {
+          console.error('Error loading settings:', error);
         }
-
-        const userBands = await getUserBands(user.id);
-        setBands(userBands);
-
-        const configs = await getUserTagConfigs(user.id);
-        setTagConfigs(configs);
       }
     };
     loadSettings();
@@ -141,12 +202,23 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
     }
 
     if (newTagName.trim() && !tagConfigs.some(tc => tc.tag_name === newTagName.trim())) {
-      const config = await upsertTagConfig(user.id, newTagName.trim(), newTagColor);
-      if (config) {
-        setTagConfigs([...tagConfigs, config]);
-        setNewTagName('');
-        setNewTagColor('purple');
-      } else {
+      try {
+        const response = await fetch('/api/tags', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tag_name: newTagName.trim(), color: newTagColor }),
+        });
+
+        if (response.ok) {
+          const config = await response.json();
+          setTagConfigs([...tagConfigs, config]);
+          setNewTagName('');
+          setNewTagColor('purple');
+        } else {
+          alert('Error creating tag config. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error creating tag config:', error);
         alert('Error creating tag config. Please try again.');
       }
     }
@@ -158,18 +230,25 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
       return;
     }
 
-    const { error } = await supabase.from('tags_config').delete().eq('id', tagConfigId);
-    if (!error) {
-      setTagConfigs(tagConfigs.filter(tc => tc.id !== tagConfigId));
-    } else {
+    try {
+      const response = await fetch(`/api/tags?id=${tagConfigId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setTagConfigs(tagConfigs.filter(tc => tc._id !== tagConfigId));
+      } else {
+        console.error('Error deleting tag config');
+        alert('Error deleting tag config. Please try again.');
+      }
+    } catch (error) {
       console.error('Error deleting tag config:', error);
       alert('Error deleting tag config. Please try again.');
     }
   };
 
-  const handleLogout = () => {
-    // Handle logout logic
-    alert('Logout functionality will be implemented with authentication');
+  const handleLogout = async () => {
+    await signOut();
   };
 
   return (
@@ -361,7 +440,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                   ) : (
                     bands.map(band => (
                       <div
-                        key={band.id}
+                        key={band._id}
                         className="flex items-center justify-between p-3 bg-base-200 border border-base-300 transition-colors"
                       >
                         <div className="flex items-center gap-3">
@@ -371,7 +450,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                           <span className="font-medium text-base-content">{band.name}</span>
                         </div>
                         <button
-                          onClick={() => handleRemoveBand(band.id)}
+                          onClick={() => handleRemoveBand(band._id)}
                           className="p-1 text-base-content/50 hover:text-red-600 transition-colors"
                         >
                           <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -420,7 +499,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                   ) : (
                     tagConfigs.map(config => (
                       <div
-                        key={config.id}
+                        key={config._id}
                         className="flex items-center justify-between p-3 bg-base-200 border border-base-300 transition-colors"
                       >
                         <div className="flex items-center gap-3">
@@ -428,7 +507,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                           <span className="font-medium text-base-content">{config.tag_name}</span>
                         </div>
                         <button
-                          onClick={() => handleRemoveTagConfig(config.id)}
+                          onClick={() => handleRemoveTagConfig(config._id)}
                           className="p-1 text-base-content/50 hover:text-red-600 transition-colors"
                         >
                           <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

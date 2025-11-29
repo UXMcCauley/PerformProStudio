@@ -17,10 +17,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         <AuthProvider>
           <ThemeProvider>
             <ProtectedRoute>
-              {children}
+              <div id="main-content" tabIndex={-1}>
+                {children}
+              </div>
             </ProtectedRoute>
           </ThemeProvider>
         </AuthProvider>

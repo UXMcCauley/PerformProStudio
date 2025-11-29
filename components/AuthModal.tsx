@@ -39,11 +39,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         if (error) {
           setError(error.message);
         } else {
-          setMessage('Check your email for the confirmation link!');
-          setTimeout(() => {
-            onClose();
-            resetForm();
-          }, 3000);
+          onClose();
+          resetForm();
         }
       } else if (mode === 'reset') {
         const { error } = await resetPassword(email);

@@ -1,7 +1,45 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Song, LyricLine, PracticeSession, LineTake, supabase } from '@/lib/supabase';
+
+type Song = {
+  _id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  folder: string | null;
+  tags: string[];
+  soundcloud_url: string | null;
+  instrumental_url: string | null;
+  completed: boolean;
+  band_id: string | null;
+  album_id: string | null;
+  folder_id: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type LyricLine = {
+  _id: string;
+  song_id: string;
+  line_number: number;
+  text: string;
+  timestamp_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type PracticeSession = {
+  _id: string;
+  song_id: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  completed: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 interface Props {
   song: Song | null;
@@ -29,24 +67,23 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
   useEffect(() => {
     loadAllSongs();
     if (song) {
-      setSelectedSongId(song.id);
+      setSelectedSongId(song._id);
       loadMetrics();
     }
   }, [song]);
 
   const handleSelectSong = async (selectedSong: Song) => {
-    const { data, error } = await supabase
-      .from('lyric_lines')
-      .select('*')
-      .eq('song_id', selectedSong.id)
-      .order('line_number', { ascending: true });
-
-    if (error) {
+    try {
+      const response = await fetch(`/api/lyrics?songId=${selectedSong._id}`);
+      if (!response.ok) {
+        console.error('Error loading lyrics');
+        return;
+      }
+      const data = await response.json();
+      onSelectSong?.(selectedSong, data || []);
+    } catch (error) {
       console.error('Error loading lyrics:', error);
-      return;
     }
-
-    onSelectSong?.(selectedSong, data || []);
   };
 
   // Get filter options
@@ -68,11 +105,14 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
   });
 
   const loadAllSongs = async () => {
-    const { data } = await supabase
-      .from('songs')
-      .select('*');
-    if (data) {
-      setAllSongs(data);
+    try {
+      const response = await fetch('/api/songs');
+      if (response.ok) {
+        const data = await response.json();
+        setAllSongs(data || []);
+      }
+    } catch (error) {
+      console.error('Error loading songs:', error);
     }
   };
 
@@ -81,47 +121,36 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
 
     setLoading(true);
 
-    const { data: sessionsData } = await supabase
-      .from('practice_sessions')
-      .select('*')
-      .eq('song_id', song.id)
-      .order('started_at', { ascending: false });
+    try {
+      const response = await fetch(`/api/practice?songId=${song._id}&type=sessions`);
+      if (response.ok) {
+        const sessionsData = await response.json();
 
-    if (sessionsData) {
-      const sessionsWithTakes = await Promise.all(
-        sessionsData.map(async session => {
-          const { data: takes } = await supabase
-            .from('line_takes')
-            .select('*')
-            .eq('session_id', session.id);
+        // For now, set totalTakes to 0 - can be enhanced later with line_takes API
+        const sessionsWithTakes = sessionsData.map((session: PracticeSession) => ({
+          ...session,
+          totalTakes: 0,
+        }));
 
-          return {
-            ...session,
-            totalTakes: takes?.length || 0,
-          };
-        })
-      );
+        setSessions(sessionsWithTakes);
 
-      setSessions(sessionsWithTakes);
+        const completed = new Set<string>(
+          sessionsData
+            .filter((s: PracticeSession) => s.completed)
+            .map((s: PracticeSession) => new Date(s.started_at).toDateString())
+        );
+        setCompletedDates(completed);
+      }
 
-      const completed = new Set(
-        sessionsData
-          .filter(s => s.completed)
-          .map(s => new Date(s.started_at).toDateString())
-      );
-      setCompletedDates(completed);
+      // Initialize take counts to 0 for all lines
+      const takeCounts: Record<string, number> = {};
+      for (const line of lyrics) {
+        takeCounts[line._id] = 0;
+      }
+      setTakesPerLine(takeCounts);
+    } catch (error) {
+      console.error('Error loading metrics:', error);
     }
-
-    const takeCounts: Record<string, number> = {};
-    for (const line of lyrics) {
-      const { data: takes } = await supabase
-        .from('line_takes')
-        .select('*')
-        .eq('lyric_line_id', line.id);
-
-      takeCounts[line.id] = takes?.length || 0;
-    }
-    setTakesPerLine(takeCounts);
 
     setLoading(false);
   };
@@ -140,23 +169,36 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
 
     if (!song) return;
 
-    const existingSession = sessions.find(
-      s => new Date(s.started_at).toDateString() === dateStr
-    );
+    try {
+      const existingSession = sessions.find(
+        s => new Date(s.started_at).toDateString() === dateStr
+      );
 
-    if (existingSession) {
-      await supabase
-        .from('practice_sessions')
-        .update({ completed: !completedDates.has(dateStr) })
-        .eq('id', existingSession.id);
-    } else {
-      await supabase.from('practice_sessions').insert({
-        song_id: song.id,
-        completed: true,
-      });
+      if (existingSession) {
+        await fetch('/api/practice', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: existingSession._id,
+            completed: !completedDates.has(dateStr)
+          }),
+        });
+      } else {
+        await fetch('/api/practice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'session',
+            songId: song._id,
+            completed: true,
+          }),
+        });
+      }
+
+      loadMetrics();
+    } catch (error) {
+      console.error('Error toggling completed date:', error);
     }
-
-    loadMetrics();
   };
 
   const formatDuration = (seconds: number | null) => {
@@ -332,7 +374,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredSongs.map(songItem => (
                 <div
-                  key={songItem.id}
+                  key={songItem._id}
                   onClick={() => handleSelectSong(songItem)}
                   className="group border border-base-300 p-4 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/10 bg-base-100 hover:border-purple-300 cursor-pointer"
                   style={{borderRadius: '4px'}}
@@ -493,7 +535,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                   <rect x="0" y="0" width="800" height="300" fill="#f8fafc" />
                   <line x1="0" y1="250" x2="800" y2="250" stroke="#cbd5e1" strokeWidth="2" />
                   {lyrics.map((line, index) => {
-                    const takes = takesPerLine[line.id] || 0;
+                    const takes = takesPerLine[line._id] || 0;
                     const maxTakes = Math.max(...Object.values(takesPerLine), 1);
                     const barHeight = (takes / maxTakes) * 200;
                     const barWidth = 800 / lyrics.length;
@@ -501,7 +543,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
                     const y = 250 - barHeight;
 
                     return (
-                      <g key={line.id}>
+                      <g key={line._id}>
                         <rect
                           x={x + barWidth * 0.1}
                           y={y}
@@ -539,12 +581,12 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
               </div>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {lyrics.map(line => {
-                  const takes = takesPerLine[line.id] || 0;
+                  const takes = takesPerLine[line._id] || 0;
                   const maxTakes = Math.max(...Object.values(takesPerLine), 1);
                   const percentage = (takes / maxTakes) * 100;
 
                   return (
-                    <div key={line.id} className="group flex flex-col md:flex-row md:items-center gap-2 p-3 bg-base-100 rounded-xl border border-base-300 hover:shadow-md transition-all duration-300">
+                    <div key={line._id} className="group flex flex-col md:flex-row md:items-center gap-2 p-3 bg-base-100 rounded-xl border border-base-300 hover:shadow-md transition-all duration-300">
                       <div className="flex-1 text-xs md:text-sm text-base-content truncate font-medium">
                         <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs font-semibold mr-2">
                           {line.line_number + 1}
@@ -676,7 +718,7 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
             <div className="space-y-2">
               {sessions.map(session => (
                 <div
-                  key={session.id}
+                  key={session._id}
                   className="group flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-3 bg-base-100 rounded-xl border border-base-300 hover:shadow-md transition-all duration-300 hover:scale-[1.02]"
                 >
                   <div className="flex items-center gap-3">

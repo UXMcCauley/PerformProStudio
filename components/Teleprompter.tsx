@@ -1,8 +1,35 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Song, LyricLine, supabase } from '@/lib/supabase';
 import Script from 'next/script';
+
+type Song = {
+  _id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  folder: string | null;
+  tags: string[];
+  soundcloud_url: string | null;
+  instrumental_url: string | null;
+  completed: boolean;
+  band_id: string | null;
+  album_id: string | null;
+  folder_id: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type LyricLine = {
+  _id: string;
+  song_id: string;
+  line_number: number;
+  text: string;
+  timestamp_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
 
 interface Props {
   song: Song | null;
@@ -29,10 +56,32 @@ export default function Teleprompter({ song, lyrics }: Props) {
   const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
   const [lineHeight, setLineHeight] = useState(1.5);
   const [autoScale, setAutoScale] = useState(true);
+  const [syncLineIndex, setSyncLineIndex] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  // Color customization
+  const defaultColors = {
+    background: '#0f0a1e',
+    activeText: '#ffffff',
+    inactiveText: '#64748b',
+  };
+  const [bgColor, setBgColor] = useState(defaultColors.background);
+  const [activeTextColor, setActiveTextColor] = useState(defaultColors.activeText);
+  const [inactiveTextColor, setInactiveTextColor] = useState(defaultColors.inactiveText);
+  const [showFullscreenControls, setShowFullscreenControls] = useState(false);
+
+  // Edit mode
+  const [editMode, setEditMode] = useState(false);
+  const [editingLineIndex, setEditingLineIndex] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState('');
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const fullscreenControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const positionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
   const sessionStartTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -40,8 +89,46 @@ export default function Teleprompter({ song, lyrics }: Props) {
       if (positionIntervalRef.current) {
         clearInterval(positionIntervalRef.current);
       }
+      if (fullscreenControlsTimeoutRef.current) {
+        clearTimeout(fullscreenControlsTimeoutRef.current);
+      }
     };
   }, []);
+
+  // Handle mouse movement for fullscreen controls visibility
+  useEffect(() => {
+    if (!isFullscreen) {
+      setShowFullscreenControls(false);
+      return;
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const isInControlArea = e.clientX < 250 && e.clientY > window.innerHeight - 150;
+
+      if (isInControlArea) {
+        setShowFullscreenControls(true);
+        if (fullscreenControlsTimeoutRef.current) {
+          clearTimeout(fullscreenControlsTimeoutRef.current);
+          fullscreenControlsTimeoutRef.current = null;
+        }
+      } else {
+        if (!fullscreenControlsTimeoutRef.current) {
+          fullscreenControlsTimeoutRef.current = setTimeout(() => {
+            setShowFullscreenControls(false);
+            fullscreenControlsTimeoutRef.current = null;
+          }, 1500);
+        }
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      if (fullscreenControlsTimeoutRef.current) {
+        clearTimeout(fullscreenControlsTimeoutRef.current);
+      }
+    };
+  }, [isFullscreen]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -49,8 +136,102 @@ export default function Teleprompter({ song, lyrics }: Props) {
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        exitFullscreen();
+      // Don't trigger if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      switch (e.key) {
+        case 'Escape':
+          if (isFullscreen) {
+            exitFullscreen();
+          }
+          break;
+        case ' ':
+          // Spacebar - toggle play/pause
+          e.preventDefault();
+          if (widget) {
+            if (isPlaying) {
+              handlePause();
+            } else {
+              handlePlay();
+            }
+          }
+          break;
+        case 'ArrowLeft':
+          // Seek backward 5 seconds
+          e.preventDefault();
+          if (widget) {
+            widget.getPosition((pos: number) => {
+              widget.seekTo(Math.max(0, pos - 5000));
+            });
+          }
+          break;
+        case 'ArrowRight':
+          // Seek forward 5 seconds
+          e.preventDefault();
+          if (widget) {
+            widget.getPosition((pos: number) => {
+              widget.seekTo(Math.min(duration, pos + 5000));
+            });
+          }
+          break;
+        case 'ArrowUp':
+          // Increase font size
+          e.preventDefault();
+          if (!autoScale) {
+            setFontSize(prev => Math.min(96, prev + 4));
+          }
+          break;
+        case 'ArrowDown':
+          // Decrease font size
+          e.preventDefault();
+          if (!autoScale) {
+            setFontSize(prev => Math.max(24, prev - 4));
+          }
+          break;
+        case 'r':
+        case 'R':
+          // Reset to beginning
+          e.preventDefault();
+          handleReset();
+          break;
+        case 'f':
+        case 'F':
+          // Toggle fullscreen
+          e.preventDefault();
+          if (isFullscreen) {
+            exitFullscreen();
+          } else {
+            enterFullscreen();
+          }
+          break;
+        case 's':
+        case 'S':
+          // Toggle sync mode
+          e.preventDefault();
+          if (widget) {
+            setSyncMode(prev => !prev);
+          }
+          break;
+        case 'Enter':
+          // In sync mode: sync current line and advance to next
+          e.preventDefault();
+          if (syncMode && widget && syncLineIndex < lyrics.length) {
+            widget.getPosition((pos: number) => {
+              lyrics[syncLineIndex].timestamp_ms = pos;
+              console.log(`Synced line ${syncLineIndex} to ${pos}ms`);
+              setSyncLineIndex(prev => Math.min(prev + 1, lyrics.length - 1));
+            });
+          }
+          break;
+        case 'Backspace':
+          // In sync mode: go back to previous line
+          e.preventDefault();
+          if (syncMode && syncLineIndex > 0) {
+            setSyncLineIndex(prev => prev - 1);
+          }
+          break;
       }
     };
 
@@ -61,7 +242,29 @@ export default function Teleprompter({ song, lyrics }: Props) {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isFullscreen]);
+  }, [isFullscreen, isPlaying, widget, duration, autoScale, syncMode, syncLineIndex, lyrics]);
+
+  // Auto-scroll to keep the active line centered
+  useEffect(() => {
+    const activeIndex = syncMode ? syncLineIndex : currentLineIndex;
+    if (activeIndex < 0 || !lineRefs.current[activeIndex] || !lyricsContainerRef.current) return;
+
+    const lineElement = lineRefs.current[activeIndex];
+    const container = lyricsContainerRef.current;
+
+    if (lineElement && container) {
+      const containerRect = container.getBoundingClientRect();
+      const lineRect = lineElement.getBoundingClientRect();
+
+      // Calculate position to center the line in the container
+      const scrollTop = lineElement.offsetTop - container.offsetTop - (containerRect.height / 2) + (lineRect.height / 2);
+
+      container.scrollTo({
+        top: Math.max(0, scrollTop),
+        behavior: 'smooth'
+      });
+    }
+  }, [currentLineIndex, syncLineIndex, syncMode]);
 
   const loadWidget = () => {
     if (!song?.instrumental_url || !iframeRef.current || !window.SC) return;
@@ -80,22 +283,30 @@ export default function Teleprompter({ song, lyrics }: Props) {
   const startPracticeSession = async () => {
     if (!song) return;
 
-    const { data, error } = await supabase
-      .from('practice_sessions')
-      .insert({
-        song_id: song.id,
-      })
-      .select()
-      .single();
+    try {
+      const response = await fetch('/api/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'session',
+          songId: song._id,
+        }),
+      });
 
-    if (error) {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error starting practice session:', response.status, errorData);
+        // Don't block playback if practice session fails
+        return;
+      }
+
+      const data = await response.json();
+      if (data) {
+        setSessionId(data._id);
+        sessionStartTimeRef.current = Date.now();
+      }
+    } catch (error) {
       console.error('Error starting practice session:', error);
-      return;
-    }
-
-    if (data) {
-      setSessionId(data.id);
-      sessionStartTimeRef.current = Date.now();
     }
   };
 
@@ -106,29 +317,45 @@ export default function Teleprompter({ song, lyrics }: Props) {
       ? Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)
       : 0;
 
-    await supabase
-      .from('practice_sessions')
-      .update({
-        ended_at: new Date().toISOString(),
-        duration_seconds: duration,
-      })
-      .eq('id', sessionId);
+    try {
+      await fetch('/api/practice', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          ended_at: new Date().toISOString(),
+          duration_seconds: duration,
+        }),
+      });
+    } catch (error) {
+      console.error('Error ending practice session:', error);
+    }
 
     setSessionId(null);
     sessionStartTimeRef.current = null;
   };
 
-  const recordLineTake = async (lineId: string) => {
+  const recordLineTake = async (lineId: string, songId: string) => {
     const currentCount = lineTakeCounts[lineId] || 0;
     const newCount = currentCount + 1;
 
     setLineTakeCounts(prev => ({ ...prev, [lineId]: newCount }));
 
-    await supabase.from('line_takes').insert({
-      lyric_line_id: lineId,
-      session_id: sessionId,
-      take_number: newCount,
-    });
+    try {
+      await fetch('/api/practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'take',
+          songId,
+          lyric_line_id: lineId,
+          session_id: sessionId,
+          take_number: newCount,
+        }),
+      });
+    } catch (error) {
+      console.error('Error recording line take:', error);
+    }
   };
 
   const startPositionTracking = () => {
@@ -204,9 +431,34 @@ export default function Teleprompter({ song, lyrics }: Props) {
     });
   };
 
+  const adjustLineTimestamp = (index: number, deltaMs: number) => {
+    if (index < 0 || index >= lyrics.length) return;
+    const currentTs = lyrics[index].timestamp_ms;
+    if (currentTs !== null) {
+      lyrics[index].timestamp_ms = Math.max(0, currentTs + deltaMs);
+      // Force re-render
+      setLineTakeCounts(prev => ({ ...prev }));
+    }
+  };
+
+  const shiftAllTimestamps = (deltaMs: number) => {
+    let hasChanges = false;
+    for (let i = 0; i < lyrics.length; i++) {
+      const currentTs = lyrics[i].timestamp_ms;
+      if (currentTs !== null) {
+        lyrics[i].timestamp_ms = Math.max(0, currentTs + deltaMs);
+        hasChanges = true;
+      }
+    }
+    if (hasChanges) {
+      // Force re-render
+      setLineTakeCounts(prev => ({ ...prev }));
+    }
+  };
+
   const handleLineTake = (line: LyricLine) => {
     if (!sessionId) return;
-    recordLineTake(line.id);
+    recordLineTake(line._id, line.song_id);
   };
 
   const enterFullscreen = async () => {
@@ -236,6 +488,190 @@ export default function Teleprompter({ song, lyrics }: Props) {
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
   };
 
+  const handleSaveTimestamps = async () => {
+    if (!song || lyrics.length === 0) return;
+
+    setIsSaving(true);
+    setSaveMessage(null);
+
+    try {
+      // Save all lyrics with their timestamps
+      const response = await fetch('/api/lyrics', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songId: song._id,
+          lyrics: lyrics.map(line => ({
+            _id: line._id,
+            timestamp_ms: line.timestamp_ms,
+          })),
+        }),
+      });
+
+      if (response.ok) {
+        setSaveMessage('Saved!');
+        setTimeout(() => setSaveMessage(null), 2000);
+      } else {
+        setSaveMessage('Error saving');
+        setTimeout(() => setSaveMessage(null), 3000);
+      }
+    } catch (error) {
+      console.error('Error saving timestamps:', error);
+      setSaveMessage('Error saving');
+      setTimeout(() => setSaveMessage(null), 3000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const resetColors = () => {
+    setBgColor(defaultColors.background);
+    setActiveTextColor(defaultColors.activeText);
+    setInactiveTextColor(defaultColors.inactiveText);
+  };
+
+  const toggleEditMode = () => {
+    if (editMode) {
+      // Exiting edit mode - cancel any pending edit
+      setEditingLineIndex(null);
+      setEditingText('');
+    } else {
+      // Entering edit mode - pause sync
+      if (syncMode) {
+        setSyncMode(false);
+      }
+      if (isPlaying) {
+        handlePause();
+      }
+    }
+    setEditMode(!editMode);
+  };
+
+  const startEditingLine = (index: number) => {
+    if (!editMode) return;
+    setEditingLineIndex(index);
+    setEditingText(lyrics[index].text);
+  };
+
+  const cancelEdit = () => {
+    setEditingLineIndex(null);
+    setEditingText('');
+  };
+
+  const saveLineEdit = async () => {
+    if (editingLineIndex === null || !song) return;
+
+    const line = lyrics[editingLineIndex];
+    try {
+      const response = await fetch('/api/lyrics/line', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineId: line._id,
+          text: editingText,
+        }),
+      });
+
+      if (response.ok) {
+        // Update local state
+        lyrics[editingLineIndex].text = editingText;
+        setLineTakeCounts(prev => ({ ...prev })); // Force re-render
+        setEditingLineIndex(null);
+        setEditingText('');
+      } else {
+        console.error('Failed to save line edit');
+      }
+    } catch (error) {
+      console.error('Error saving line edit:', error);
+    }
+  };
+
+  const addNewLine = async (afterIndex: number) => {
+    if (!song) return;
+
+    try {
+      const response = await fetch('/api/lyrics/line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songId: song._id,
+          afterIndex,
+          text: '',
+        }),
+      });
+
+      if (response.ok) {
+        const { line: newLine } = await response.json();
+        // Insert the new line after the specified index
+        lyrics.splice(afterIndex + 1, 0, newLine);
+        // Update line numbers for all subsequent lines
+        for (let i = afterIndex + 2; i < lyrics.length; i++) {
+          lyrics[i].line_number = i;
+        }
+        setLineTakeCounts(prev => ({ ...prev })); // Force re-render
+        // Start editing the new line
+        setEditingLineIndex(afterIndex + 1);
+        setEditingText('');
+      }
+    } catch (error) {
+      console.error('Error adding new line:', error);
+    }
+  };
+
+  const splitLineAtCursor = async (cursorPosition: number) => {
+    if (editingLineIndex === null || !song) return;
+
+    const line = lyrics[editingLineIndex];
+    const beforeCursor = editingText.slice(0, cursorPosition).trim();
+    const afterCursor = editingText.slice(cursorPosition).trim();
+
+    try {
+      // Update the current line with text before cursor
+      const updateResponse = await fetch('/api/lyrics/line', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lineId: line._id,
+          text: beforeCursor,
+        }),
+      });
+
+      if (!updateResponse.ok) {
+        console.error('Failed to update current line');
+        return;
+      }
+
+      // Create a new line with text after cursor
+      const createResponse = await fetch('/api/lyrics/line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songId: song._id,
+          afterIndex: editingLineIndex,
+          text: afterCursor,
+        }),
+      });
+
+      if (createResponse.ok) {
+        const { line: newLine } = await createResponse.json();
+        // Update current line text
+        lyrics[editingLineIndex].text = beforeCursor;
+        // Insert the new line
+        lyrics.splice(editingLineIndex + 1, 0, newLine);
+        // Update line numbers
+        for (let i = editingLineIndex + 2; i < lyrics.length; i++) {
+          lyrics[i].line_number = i;
+        }
+        setLineTakeCounts(prev => ({ ...prev })); // Force re-render
+        // Move to editing the new line
+        setEditingLineIndex(editingLineIndex + 1);
+        setEditingText(afterCursor);
+      }
+    } catch (error) {
+      console.error('Error splitting line:', error);
+    }
+  };
+
   useEffect(() => {
     if (isPlaying) {
       startPositionTracking();
@@ -256,26 +692,17 @@ export default function Teleprompter({ song, lyrics }: Props) {
         ref={containerRef}
         className={`${
           isFullscreen
-            ? 'fixed inset-0 z-50 bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 flex flex-col'
-            : 'bg-white/80 backdrop-blur-xs rounded-2xl shadow-lg shadow-purple-500/10 border border-slate-200/50 p-4 md:p-6'
+            ? 'fixed inset-0 z-50 flex flex-col p-10'
+            : ''
         }`}
+        style={isFullscreen ? { backgroundColor: bgColor } : undefined}
       >
-        {!isFullscreen && (
-          <>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-1 h-8 bg-linear-to-b from-purple-500 to-pink-500 rounded-full" />
-              <h2 className="text-xl md:text-2xl font-bold bg-linear-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Teleprompter
-              </h2>
-            </div>
-            {!song?.instrumental_url && (
-              <div className="mb-6 p-4 bg-linear-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-xl">
-                <p className="text-sm md:text-base text-amber-800">
-                  No instrumental track set. Add one in the editor to use the teleprompter.
-                </p>
-              </div>
-            )}
-          </>
+        {!isFullscreen && !song?.instrumental_url && (
+          <div className="mb-4 p-4 bg-linear-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-xl">
+            <p className="text-sm md:text-base text-amber-800">
+              No instrumental track set. Add one in the editor to use the teleprompter.
+            </p>
+          </div>
         )}
 
         {song?.instrumental_url && (
@@ -294,7 +721,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
           </div>
         )}
 
-        <div className={`flex items-center gap-2 md:gap-3 ${isFullscreen ? 'p-4 justify-center' : 'bg-linear-to-r from-slate-50 to-purple-50/50 p-3 md:p-4 rounded-xl mb-6 flex-wrap border border-slate-200/50'}`}>
+        <div className={`flex items-center gap-2 md:gap-3 ${isFullscreen ? 'p-4 justify-center' : 'p-3 md:p-4 rounded-xl mb-4 flex-wrap border border-slate-200/50'}`}>
           {!isFullscreen && (
             <>
               <button
@@ -328,16 +755,27 @@ export default function Teleprompter({ song, lyrics }: Props) {
               </button>
               <button
                 onClick={() => setSyncMode(!syncMode)}
-                disabled={!widget}
+                disabled={!widget || editMode}
                 className="group p-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 title={syncMode ? 'Exit Sync Mode' : 'Sync Mode'}
               >
                 <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-300 ${
-                  !widget ? 'text-slate-700' :
+                  !widget || editMode ? 'text-slate-700' :
                   syncMode ? 'text-red-500 scale-110' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110'
                 }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="9" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+                </svg>
+              </button>
+              <button
+                onClick={toggleEditMode}
+                className="group p-3 transition-all duration-300"
+                title={editMode ? 'Exit Edit Mode' : 'Edit Lyrics'}
+              >
+                <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-300 ${
+                  editMode ? 'text-amber-500 scale-110' : 'text-slate-400 group-hover:text-amber-500 group-hover:scale-110'
+                }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                 </svg>
               </button>
               <button
@@ -433,34 +871,193 @@ export default function Teleprompter({ song, lyrics }: Props) {
                   className="w-20 md:w-32 accent-purple-600 cursor-pointer"
                 />
               </label>
+              <div className="h-8 w-px bg-slate-300 mx-1" />
+              <label className="flex items-center gap-1.5 bg-white/60 rounded-lg px-2 py-1 border border-slate-200" title="Background Color">
+                <span className="text-xs text-slate-600">BG</span>
+                <input
+                  type="color"
+                  value={bgColor}
+                  onChange={e => setBgColor(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border-0"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 bg-white/60 rounded-lg px-2 py-1 border border-slate-200" title="Active Line Color">
+                <span className="text-xs text-slate-600">Active</span>
+                <input
+                  type="color"
+                  value={activeTextColor}
+                  onChange={e => setActiveTextColor(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border-0"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 bg-white/60 rounded-lg px-2 py-1 border border-slate-200" title="Inactive Line Color">
+                <span className="text-xs text-slate-600">Inactive</span>
+                <input
+                  type="color"
+                  value={inactiveTextColor}
+                  onChange={e => setInactiveTextColor(e.target.value)}
+                  className="w-6 h-6 rounded cursor-pointer border-0"
+                />
+              </label>
+              <button
+                onClick={resetColors}
+                className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Reset Colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+              <div className="h-8 w-px bg-slate-300 mx-1" />
+              <button
+                onClick={handleSaveTimestamps}
+                disabled={isSaving || !song}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg transition-colors"
+                title="Save Timestamps"
+              >
+                {isSaving ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                {saveMessage || 'Save'}
+              </button>
             </>
           )}
           {isFullscreen && (
-            <button
-              onClick={exitFullscreen}
-              className="fixed top-6 right-6 p-4 bg-white/10 backdrop-blur-md hover:bg-white/20 text-white rounded-2xl z-50 transition-all duration-300 hover:scale-110 hover:shadow-2xl hover:shadow-white/20 active:scale-95 border border-white/20"
-              title="Exit Fullscreen"
+            <div
+              className={`fixed bottom-6 left-6 flex items-center gap-2 p-3 bg-black/40 backdrop-blur-md rounded-2xl z-50 border border-white/10 transition-all duration-500 ${
+                showFullscreenControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+              }`}
+              onMouseEnter={() => setShowFullscreenControls(true)}
             >
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              <button
+                onClick={isPlaying ? handlePause : handlePlay}
+                disabled={!widget}
+                className="p-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl transition-all duration-200 hover:scale-105"
+                title={isPlaying ? 'Pause' : 'Play'}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  {isPlaying ? (
+                    <>
+                      <rect x="6" y="4" width="4" height="16" rx="1" />
+                      <rect x="14" y="4" width="4" height="16" rx="1" />
+                    </>
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
+                  )}
+                </svg>
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={!widget}
+                className="p-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl transition-all duration-200 hover:scale-105"
+                title="Restart"
+                aria-label="Restart"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setSyncMode(!syncMode)}
+                disabled={!widget || editMode}
+                className={`p-3 ${syncMode ? 'bg-red-500/50 hover:bg-red-500/70' : 'bg-white/10 hover:bg-white/20'} disabled:opacity-50 text-white rounded-xl transition-all duration-200 hover:scale-105`}
+                title={syncMode ? 'Exit Sync Mode' : 'Sync Mode'}
+                aria-label={syncMode ? 'Exit Sync Mode' : 'Sync Mode'}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
+                </svg>
+              </button>
+              <button
+                onClick={toggleEditMode}
+                className={`p-3 ${editMode ? 'bg-amber-500/50 hover:bg-amber-500/70' : 'bg-white/10 hover:bg-white/20'} text-white rounded-xl transition-all duration-200 hover:scale-105`}
+                title={editMode ? 'Exit Edit Mode' : 'Edit Lyrics'}
+                aria-label={editMode ? 'Exit Edit Mode' : 'Edit Lyrics'}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                </svg>
+              </button>
+              <div className="w-px h-8 bg-white/20 mx-1" />
+              <button
+                onClick={exitFullscreen}
+                className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all duration-200 hover:scale-105"
+                title="Exit Fullscreen"
+                aria-label="Exit Fullscreen"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                </svg>
+              </button>
+            </div>
           )}
         </div>
 
         {!isFullscreen && syncMode && (
-          <div className="mb-6 p-4 bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl animate-pulse">
-            <p className="text-blue-800 text-xs md:text-sm">
-              <strong>🎯 Sync Mode:</strong> Play the track and click on each line when it should appear
+          <div className="mb-4 p-4 bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-blue-800 text-xs md:text-sm">
+                <strong>🎯 Sync Mode:</strong> Press <kbd className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">Enter</kbd> to sync line {syncLineIndex + 1} of {lyrics.length} and advance. <kbd className="px-1.5 py-0.5 bg-blue-200 rounded text-xs font-mono">Backspace</kbd> to go back.
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-blue-700 font-medium">Shift All:</span>
+                <button
+                  onClick={() => shiftAllTimestamps(-300)}
+                  className="px-3 py-1 text-xs font-medium bg-blue-200 hover:bg-blue-300 text-blue-800 rounded-lg transition-colors"
+                  title="Shift all timestamps 300ms earlier"
+                >
+                  -300ms
+                </button>
+                <button
+                  onClick={() => shiftAllTimestamps(300)}
+                  className="px-3 py-1 text-xs font-medium bg-blue-200 hover:bg-blue-300 text-blue-800 rounded-lg transition-colors"
+                  title="Shift all timestamps 300ms later"
+                >
+                  +300ms
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isFullscreen && editMode && (
+          <div className="mb-4 p-4 bg-linear-to-r from-amber-50 to-yellow-50 border border-amber-200/50 rounded-xl">
+            <p className="text-amber-800 text-xs md:text-sm">
+              <strong>✏️ Edit Mode:</strong> Click the pencil icon to edit a line, or the <span className="text-green-600">+</span> to add a new line after. Press <kbd className="px-1.5 py-0.5 bg-amber-200 rounded text-xs font-mono">Enter</kbd> to save, <kbd className="px-1.5 py-0.5 bg-amber-200 rounded text-xs font-mono">Shift+Enter</kbd> to split at cursor, or <kbd className="px-1.5 py-0.5 bg-amber-200 rounded text-xs font-mono">Esc</kbd> to cancel.
             </p>
           </div>
         )}
 
-        <div className={`rounded-2xl overflow-y-auto ${
+        {!isFullscreen && (
+          <div className="mb-6 p-3 bg-slate-50 border border-slate-200/50 rounded-xl">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+              <span><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono">Space</kbd> Play/Pause</span>
+              <span><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono">←</kbd><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono ml-0.5">→</kbd> Seek ±5s</span>
+              <span><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono">R</kbd> Reset</span>
+              <span><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono">F</kbd> Fullscreen</span>
+              <span><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono">S</kbd> Sync Mode</span>
+              {!autoScale && <span><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono">↑</kbd><kbd className="px-1.5 py-0.5 bg-slate-200 rounded font-mono ml-0.5">↓</kbd> Font Size</span>}
+            </div>
+          </div>
+        )}
+
+        <div
+          ref={lyricsContainerRef}
+          className={`rounded-2xl overflow-y-auto scroll-smooth ${
           isFullscreen
-            ? 'flex-1 bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 p-4 md:p-8'
-            : 'bg-linear-to-br from-slate-950 via-purple-950 to-slate-950 p-4 md:p-8 min-h-[300px] md:min-h-[500px] max-h-[600px] border border-slate-800/50 shadow-inner'
-        }`}>
+            ? 'flex-1'
+            : 'p-4 md:p-8 min-h-[300px] md:min-h-[500px] max-h-[600px] border border-slate-800/50 shadow-inner'
+        }`}
+          style={{ backgroundColor: isFullscreen ? 'transparent' : bgColor }}>
           {lyrics.length === 0 ? (
             <div className="text-center text-slate-500 py-20">No lyrics to display</div>
           ) : (
@@ -468,8 +1065,9 @@ export default function Teleprompter({ song, lyrics }: Props) {
               {lyrics.map((line, index) => {
                 const isActive = index === currentLineIndex;
                 const isPast = index < currentLineIndex;
-                const isUpcoming = index > currentLineIndex;
-                const takeCount = lineTakeCounts[line.id] || 0;
+                const isSyncTarget = syncMode && index === syncLineIndex;
+                const isSyncDone = syncMode && index < syncLineIndex;
+                const takeCount = lineTakeCounts[line._id] || 0;
 
                 const longestLine = lyrics.reduce((max, l) => l.text.length > max ? l.text.length : max, 0);
                 const calculatedFontSize = autoScale
@@ -478,9 +1076,11 @@ export default function Teleprompter({ song, lyrics }: Props) {
 
                 return (
                   <div
-                    key={line.id}
+                    key={line._id}
+                    ref={el => { lineRefs.current[index] = el; }}
                     onClick={() => {
                       if (syncMode) {
+                        setSyncLineIndex(index);
                         handleSyncLine(index);
                       } else if (isActive && sessionId) {
                         handleLineTake(line);
@@ -489,27 +1089,137 @@ export default function Teleprompter({ song, lyrics }: Props) {
                     className={`transition-all duration-500 ease-out ${
                       syncMode || (isActive && sessionId) ? 'cursor-pointer hover:opacity-80' : ''
                     } ${
-                      isActive
-                        ? 'text-white opacity-100 scale-105 md:scale-110 animate-pulse'
+                      syncMode
+                        ? isSyncTarget
+                          ? 'opacity-100 scale-105'
+                          : isSyncDone
+                          ? 'opacity-60'
+                          : 'opacity-40'
+                        : isActive
+                        ? 'opacity-100 scale-105 md:scale-110 animate-pulse'
                         : isPast
-                        ? 'text-slate-600 opacity-30'
-                        : 'text-slate-500 opacity-50'
+                        ? 'opacity-30'
+                        : 'opacity-50'
                     }`}
                     style={{
                       fontSize: `${calculatedFontSize}px`,
-                      fontWeight: isActive ? 'bold' : 'normal',
-                      textShadow: isActive ? '0 0 30px rgba(168, 85, 247, 0.8), 0 0 60px rgba(168, 85, 247, 0.4)' : 'none',
+                      fontWeight: isActive || isSyncTarget ? 'bold' : 'normal',
+                      color: syncMode
+                        ? isSyncTarget
+                          ? '#22d3ee'
+                          : isSyncDone
+                          ? '#22c55e'
+                          : inactiveTextColor
+                        : isActive
+                        ? activeTextColor
+                        : inactiveTextColor,
+                      textShadow: isActive
+                        ? `0 0 30px ${activeTextColor}80, 0 0 60px ${activeTextColor}40`
+                        : isSyncTarget
+                        ? '0 0 20px rgba(34, 211, 238, 0.6)'
+                        : 'none',
                       textAlign,
                       wordBreak: 'keep-all',
                       overflowWrap: 'normal',
                       transform: isActive ? 'translateY(-4px)' : 'translateY(0)',
                     }}
                   >
-                    {line.text}
-                    {!isFullscreen && takeCount > 0 && (
-                      <span className="ml-2 text-xs text-purple-400 bg-purple-500/20 px-2 py-1 rounded-full border border-purple-400/30">
-                        {takeCount}
+                    {/* Edit mode: show edit and add icons */}
+                    {editMode && editingLineIndex !== index && (
+                      <span className="inline-flex items-center mr-2 gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); startEditingLine(index); }}
+                          className="inline-flex items-center justify-center w-8 h-8 bg-amber-500/30 hover:bg-amber-500/50 rounded-lg transition-colors"
+                          title="Edit this line"
+                        >
+                          <svg className="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); addNewLine(index); }}
+                          className="inline-flex items-center justify-center w-8 h-8 bg-green-500/30 hover:bg-green-500/50 rounded-lg transition-colors"
+                          title="Add new line after this"
+                        >
+                          <svg className="w-4 h-4 text-green-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                          </svg>
+                        </button>
                       </span>
+                    )}
+
+                    {/* Edit mode: show input when editing this line */}
+                    {editMode && editingLineIndex === index ? (
+                      <div className="flex items-center gap-2 w-full">
+                        <input
+                          type="text"
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.shiftKey) {
+                              e.preventDefault();
+                              const cursorPosition = (e.target as HTMLInputElement).selectionStart || 0;
+                              splitLineAtCursor(cursorPosition);
+                            } else if (e.key === 'Enter') {
+                              saveLineEdit();
+                            } else if (e.key === 'Escape') {
+                              cancelEdit();
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 bg-slate-800 border border-amber-500/50 rounded-lg text-white text-base focus:outline-none focus:border-amber-400"
+                          autoFocus
+                        />
+                        <button
+                          onClick={saveLineEdit}
+                          className="p-2 bg-green-500/30 hover:bg-green-500/50 rounded-lg transition-colors"
+                          title="Save"
+                        >
+                          <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="p-2 bg-red-500/30 hover:bg-red-500/50 rounded-lg transition-colors"
+                          title="Cancel"
+                        >
+                          <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        {syncMode && isSyncTarget && <span className="text-cyan-400 mr-2">▶</span>}
+                        {line.text}
+                        {syncMode && isSyncDone && (
+                          <span className="inline-flex items-center ml-3 gap-1">
+                            <span className="text-green-400 text-sm">✓</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); adjustLineTimestamp(index, -100); }}
+                              className="px-1.5 py-0.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+                              title="Earlier (-100ms)"
+                            >
+                              -
+                            </button>
+                            <span className="text-xs text-slate-400 font-mono min-w-[50px] text-center">
+                              {((line.timestamp_ms || 0) / 1000).toFixed(1)}s
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); adjustLineTimestamp(index, 100); }}
+                              className="px-1.5 py-0.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+                              title="Later (+100ms)"
+                            >
+                              +
+                            </button>
+                          </span>
+                        )}
+                        {!isFullscreen && !syncMode && !editMode && takeCount > 0 && (
+                          <span className="ml-2 text-xs text-purple-400 bg-purple-500/20 px-2 py-1 rounded-full border border-purple-400/30">
+                            {takeCount}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 );

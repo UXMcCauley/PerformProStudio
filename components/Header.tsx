@@ -32,15 +32,13 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   return (
-    <header className="navbar fixed top-0 left-0 right-0 z-50 border-b border-base-300 border-opacity-50 shadow-lg w-full mx-auto justify-right px-4 py-2">
+    <header className="navbar fixed top-0 left-0 right-0 z-50 bg-base-100 border-b border-base-300 shadow-lg w-full mx-auto justify-right px-4 py-2" role="banner">
       <div className="navbar-start justify-right">
-        <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-        </svg>
+        <span className="text-lg md:text-xl font-bold text-primary whitespace-nowrap">Lyric Teleprompter</span>
       </div>
 
       <div className="navbar-center">
-        <nav className="flex items-center gap-2">
+        <nav className="flex items-center gap-2" role="navigation" aria-label="Main navigation">
               <button
                 onClick={() => onTabChange('library')}
                 className={`btn btn-ghost btn-sm flex flex-col items-center gap-1 ${activeTab === 'library'
@@ -48,6 +46,8 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                     : ''
                   }`}
                 title="Library"
+                aria-label="Song Library"
+                aria-current={activeTab === 'library' ? 'page' : undefined}
               >
                 <svg
                   className="w-7 h-7"
@@ -70,6 +70,8 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                     : ''
                   }`}
                 title="Editor"
+                aria-label="Lyric Editor"
+                aria-current={activeTab === 'editor' ? 'page' : undefined}
               >
                 <svg
                   className="w-7 h-7"
@@ -96,6 +98,9 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                       : ''
                   }`}
                 title="Teleprompter"
+                aria-label="Teleprompter"
+                aria-current={activeTab === 'teleprompter' ? 'page' : undefined}
+                aria-disabled={lyricsCount === 0}
               >
                 <svg
                   className="w-7 h-7"
@@ -118,6 +123,8 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                     : ''
                   }`}
                 title="Metrics"
+                aria-label="Practice Metrics"
+                aria-current={activeTab === 'metrics' ? 'page' : undefined}
               >
                 <svg
                   className="w-7 h-7"
@@ -142,14 +149,17 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                 onClick={() => setShowThemeDropdown(!showThemeDropdown)}
                 className="btn btn-ghost btn-circle"
                 title="Change Theme"
+                aria-label="Change theme"
+                aria-expanded={showThemeDropdown}
+                aria-haspopup="listbox"
               >
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </button>
 
               {showThemeDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-base-100 shadow-xl border border-base-300 rounded-box py-2 z-50 max-h-64 overflow-y-auto">
+                <div className="absolute right-0 mt-2 w-48 bg-base-100 shadow-xl border border-base-300 rounded-box py-2 z-50 max-h-64 overflow-y-auto" role="listbox" aria-label="Theme options">
                   {availableThemes.map((themeName) => (
                     <button
                       key={themeName}
@@ -160,11 +170,13 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
                       className={`w-full px-4 py-2 text-left text-sm transition-colors hover:text-primary flex items-center gap-2 ${
                         theme === themeName ? 'text-primary font-semibold' : ''
                       }`}
+                      role="option"
+                      aria-selected={theme === themeName}
                     >
-                      <div className="w-3 h-3 rounded-full bg-primary"></div>
+                      <div className="w-3 h-3 rounded-full bg-primary" aria-hidden="true"></div>
                       <span className="capitalize">{themeName}</span>
                       {theme === themeName && (
-                        <svg className="w-5 h-5 ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                        <svg className="w-5 h-5 ml-auto" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
                       )}
@@ -176,23 +188,24 @@ export default function Header({ activeTab, onTabChange, lyricsCount }: Props) {
 
         {/* Profile Avatar Dropdown */}
         <div className="relative" ref={dropdownRef}>
-          <div 
-            tabIndex={0} 
-            role="button" 
+          <button
             className="btn btn-ghost btn-circle avatar"
             onClick={() => setShowDropdown(!showDropdown)}
+            aria-label="User menu"
+            aria-expanded={showDropdown}
+            aria-haspopup="menu"
           >
-            <div className="w-10 rounded-full bg-primary text-primary-content flex items-center justify-center font-semibold">
-              {user?.user_metadata?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
+            <div className="w-10 rounded-full bg-primary text-primary-content flex items-center justify-center font-semibold" aria-hidden="true">
+              {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
             </div>
-          </div>
+          </button>
 
           {showDropdown && (
-            <ul tabIndex={0} className="absolute right-0 mt-2 menu bg-base-100 rounded-box z-60 w-64 p-2 shadow-xl border border-base-300">
+            <ul className="absolute right-0 mt-2 menu bg-base-100 rounded-box z-60 w-64 p-2 shadow-xl border border-base-300" role="menu" aria-label="User options">
               <li className="menu-title">
                 <span>
                   <div className="text-sm font-semibold text-base-content">
-                    {user?.user_metadata?.displayName || 'User'}
+                    {user?.name || 'User'}
                   </div>
                   <div className="text-xs text-base-content/60">{user?.email}</div>
                 </span>

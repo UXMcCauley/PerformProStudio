@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState('');
@@ -10,24 +9,29 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  
+  const [token, setToken] = useState<string | null>(null);
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Check if we have the proper hash parameters for password reset
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-    
-    if (!accessToken || !refreshToken) {
-      setError('Invalid or expired reset link. Please request a new password reset.');
+    // Get token from URL query params
+    const resetToken = searchParams.get('token');
+    if (!resetToken) {
+      setError('Invalid or missing reset token. Please request a new password reset link.');
+    } else {
+      setToken(resetToken);
     }
-  }, []);
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (!token) {
+      setError('Invalid reset token');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -42,12 +46,16 @@ export default function ResetPasswordPage() {
     setError('');
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
       });
 
-      if (error) {
-        setError(error.message);
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || 'Failed to reset password');
       } else {
         setSuccess(true);
         setTimeout(() => {
@@ -131,11 +139,17 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             className={`btn btn-primary w-full ${loading ? 'loading' : ''}`}
-            disabled={loading}
+            disabled={loading || !token}
           >
             {loading ? 'Updating...' : 'Update Password'}
           </button>
         </form>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-base-content/60">
+            Note: Password reset requires an email service to be configured.
+          </p>
+        </div>
       </div>
     </div>
   );

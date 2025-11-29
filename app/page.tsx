@@ -5,9 +5,37 @@ import Header from '@/components/Header';
 import SongLibrary from '@/components/SongLibrary';
 import LyricEditor from '@/components/LyricEditor';
 import SimpleTeleprompter from '@/components/SimpleTeleprompter';
+import Teleprompter from '@/components/Teleprompter';
 import SongMetrics from '@/components/SongMetrics';
 import Settings from '@/components/Settings';
-import { Song, LyricLine } from '@/lib/supabase';
+
+type Song = {
+  _id: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  folder: string | null;
+  tags: string[];
+  soundcloud_url: string | null;
+  instrumental_url: string | null;
+  completed: boolean;
+  band_id: string | null;
+  album_id: string | null;
+  folder_id: string | null;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type LyricLine = {
+  _id: string;
+  song_id: string;
+  line_number: number;
+  text: string;
+  timestamp_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export default function Home() {
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
@@ -80,11 +108,9 @@ export default function Home() {
             />
           )}
           {activeTab === 'teleprompter' && (
-            <SimpleTeleprompter
+            <Teleprompter
               song={currentSong}
               lyrics={lyrics}
-              onBack={handleBack}
-              showBackButton={previousTab !== 'teleprompter'}
             />
           )}
            {activeTab === 'metrics' && (
