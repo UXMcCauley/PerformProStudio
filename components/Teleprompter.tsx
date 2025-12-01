@@ -42,6 +42,21 @@ declare global {
   }
 }
 
+// Helper to detect if URL is a SoundCloud URL
+function isSoundCloudUrl(url: string): boolean {
+  return url.includes('soundcloud.com');
+}
+
+// Helper to detect if URL is a direct audio file
+function isDirectAudioUrl(url: string): boolean {
+  return url.includes('blob.vercel-storage.com') ||
+         url.endsWith('.mp3') ||
+         url.endsWith('.wav') ||
+         url.endsWith('.ogg') ||
+         url.endsWith('.m4a') ||
+         url.endsWith('.flac');
+}
+
 export default function Teleprompter({ song, lyrics }: Props) {
   const [widget, setWidget] = useState<any>(null);
   const [currentLineIndex, setCurrentLineIndex] = useState(-1);
@@ -60,6 +75,10 @@ export default function Teleprompter({ song, lyrics }: Props) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
+  // Audio source type
+  const [audioType, setAudioType] = useState<'none' | 'soundcloud' | 'direct'>('none');
+  const [audioReady, setAudioReady] = useState(false);
+
   // Color customization
   const defaultColors = {
     background: '#0f0a1e',
@@ -77,12 +96,65 @@ export default function Teleprompter({ song, lyrics }: Props) {
   const [editingText, setEditingText] = useState('');
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const fullscreenControlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const positionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
   const sessionStartTimeRef = useRef<number | null>(null);
+
+  // Determine audio type when song changes
+  useEffect(() => {
+    const audioUrl = song?.instrumental_url || song?.soundcloud_url;
+    if (!audioUrl) {
+      setAudioType('none');
+      setAudioReady(false);
+    } else if (isSoundCloudUrl(audioUrl)) {
+      setAudioType('soundcloud');
+    } else if (isDirectAudioUrl(audioUrl)) {
+      setAudioType('direct');
+    } else {
+      // Default to soundcloud for backward compatibility
+      setAudioType('soundcloud');
+    }
+  }, [song?.instrumental_url, song?.soundcloud_url]);
+
+  // Setup HTML5 audio when using direct audio
+  useEffect(() => {
+    if (audioType !== 'direct' || !audioRef.current) return;
+
+    const audio = audioRef.current;
+    const audioUrl = song?.instrumental_url || song?.soundcloud_url;
+    if (!audioUrl) return;
+
+    audio.src = audioUrl;
+
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration * 1000); // Convert to ms
+      setAudioReady(true);
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setPosition(0);
+      setCurrentLineIndex(-1);
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [audioType, song?.instrumental_url, song?.soundcloud_url]);
 
   useEffect(() => {
     return () => {
@@ -150,7 +222,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
         case ' ':
           // Spacebar - toggle play/pause
           e.preventDefault();
-          if (widget) {
+          if (isPlayerReady) {
             if (isPlaying) {
               handlePause();
             } else {
@@ -161,18 +233,18 @@ export default function Teleprompter({ song, lyrics }: Props) {
         case 'ArrowLeft':
           // Seek backward 5 seconds
           e.preventDefault();
-          if (widget) {
-            widget.getPosition((pos: number) => {
-              widget.seekTo(Math.max(0, pos - 5000));
+          if (isPlayerReady) {
+            getCurrentPosition((pos: number) => {
+              seekTo(Math.max(0, pos - 5000));
             });
           }
           break;
         case 'ArrowRight':
           // Seek forward 5 seconds
           e.preventDefault();
-          if (widget) {
-            widget.getPosition((pos: number) => {
-              widget.seekTo(Math.min(duration, pos + 5000));
+          if (isPlayerReady) {
+            getCurrentPosition((pos: number) => {
+              seekTo(Math.min(duration, pos + 5000));
             });
           }
           break;
@@ -210,15 +282,15 @@ export default function Teleprompter({ song, lyrics }: Props) {
         case 'S':
           // Toggle sync mode
           e.preventDefault();
-          if (widget) {
+          if (isPlayerReady) {
             setSyncMode(prev => !prev);
           }
           break;
         case 'Enter':
           // In sync mode: sync current line and advance to next
           e.preventDefault();
-          if (syncMode && widget && syncLineIndex < lyrics.length) {
-            widget.getPosition((pos: number) => {
+          if (syncMode && isPlayerReady && syncLineIndex < lyrics.length) {
+            getCurrentPosition((pos: number) => {
               lyrics[syncLineIndex].timestamp_ms = pos;
               console.log(`Synced line ${syncLineIndex} to ${pos}ms`);
               setSyncLineIndex(prev => Math.min(prev + 1, lyrics.length - 1));
@@ -267,18 +339,26 @@ export default function Teleprompter({ song, lyrics }: Props) {
   }, [currentLineIndex, syncLineIndex, syncMode]);
 
   const loadWidget = () => {
-    if (!song?.instrumental_url || !iframeRef.current || !window.SC) return;
+    if (audioType !== 'soundcloud') return;
+    if (!iframeRef.current || !window.SC) return;
+
+    const audioUrl = song?.instrumental_url || song?.soundcloud_url;
+    if (!audioUrl) return;
 
     const newWidget = window.SC.Widget(iframeRef.current);
     setWidget(newWidget);
 
     newWidget.bind(window.SC.Widget.Events.READY, () => {
       newWidget.getDuration((d: number) => setDuration(d));
+      setAudioReady(true);
     });
 
     newWidget.bind(window.SC.Widget.Events.PLAY, () => setIsPlaying(true));
     newWidget.bind(window.SC.Widget.Events.PAUSE, () => setIsPlaying(false));
   };
+
+  // Check if player is ready (either SoundCloud widget or HTML5 audio)
+  const isPlayerReady = audioType === 'soundcloud' ? !!widget : audioType === 'direct' ? audioReady : false;
 
   const startPracticeSession = async () => {
     if (!song) return;
@@ -364,11 +444,15 @@ export default function Teleprompter({ song, lyrics }: Props) {
     }
 
     positionIntervalRef.current = setInterval(() => {
-      if (widget) {
+      if (audioType === 'soundcloud' && widget) {
         widget.getPosition((pos: number) => {
           setPosition(pos);
           updateCurrentLine(pos);
         });
+      } else if (audioType === 'direct' && audioRef.current) {
+        const pos = audioRef.current.currentTime * 1000; // Convert to ms
+        setPosition(pos);
+        updateCurrentLine(pos);
       }
     }, 100);
   };
@@ -397,8 +481,14 @@ export default function Teleprompter({ song, lyrics }: Props) {
   };
 
   const handlePlay = async () => {
-    if (widget) {
+    if (audioType === 'soundcloud' && widget) {
       widget.play();
+      startPositionTracking();
+      if (!sessionId) {
+        await startPracticeSession();
+      }
+    } else if (audioType === 'direct' && audioRef.current) {
+      audioRef.current.play();
       startPositionTracking();
       if (!sessionId) {
         await startPracticeSession();
@@ -407,25 +497,49 @@ export default function Teleprompter({ song, lyrics }: Props) {
   };
 
   const handlePause = async () => {
-    if (widget) {
+    if (audioType === 'soundcloud' && widget) {
       widget.pause();
+      stopPositionTracking();
+      await endPracticeSession();
+    } else if (audioType === 'direct' && audioRef.current) {
+      audioRef.current.pause();
       stopPositionTracking();
       await endPracticeSession();
     }
   };
 
   const handleReset = () => {
-    if (widget) {
+    if (audioType === 'soundcloud' && widget) {
       widget.seekTo(0);
+      setCurrentLineIndex(-1);
+      setPosition(0);
+    } else if (audioType === 'direct' && audioRef.current) {
+      audioRef.current.currentTime = 0;
       setCurrentLineIndex(-1);
       setPosition(0);
     }
   };
 
-  const handleSyncLine = (index: number) => {
-    if (!syncMode || !widget) return;
+  const seekTo = (positionMs: number) => {
+    if (audioType === 'soundcloud' && widget) {
+      widget.seekTo(positionMs);
+    } else if (audioType === 'direct' && audioRef.current) {
+      audioRef.current.currentTime = positionMs / 1000;
+    }
+  };
 
-    widget.getPosition((pos: number) => {
+  const getCurrentPosition = (callback: (pos: number) => void) => {
+    if (audioType === 'soundcloud' && widget) {
+      widget.getPosition(callback);
+    } else if (audioType === 'direct' && audioRef.current) {
+      callback(audioRef.current.currentTime * 1000);
+    }
+  };
+
+  const handleSyncLine = (index: number) => {
+    if (!syncMode || !isPlayerReady) return;
+
+    getCurrentPosition((pos: number) => {
       lyrics[index].timestamp_ms = pos;
       console.log(`Synced line ${index} to ${pos}ms`);
     });
@@ -697,15 +811,21 @@ export default function Teleprompter({ song, lyrics }: Props) {
         }`}
         style={isFullscreen ? { backgroundColor: bgColor } : undefined}
       >
-        {!isFullscreen && !song?.instrumental_url && (
+        {!isFullscreen && audioType === 'none' && (
           <div className="mb-4 p-4 bg-linear-to-r from-amber-50 to-orange-50 border border-amber-200/50 rounded-xl">
             <p className="text-sm md:text-base text-amber-800">
-              No instrumental track set. Add one in the editor to use the teleprompter.
+              No audio track set. Add one in the editor to use the teleprompter with audio sync.
             </p>
           </div>
         )}
 
-        {song?.instrumental_url && (
+        {/* Hidden audio element for direct audio files */}
+        {audioType === 'direct' && (
+          <audio ref={audioRef} className="hidden" preload="metadata" />
+        )}
+
+        {/* SoundCloud iframe for SoundCloud URLs */}
+        {audioType === 'soundcloud' && (song?.instrumental_url || song?.soundcloud_url) && (
           <div className="hidden">
             <iframe
               ref={iframeRef}
@@ -715,7 +835,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
               frameBorder="no"
               allow="autoplay"
               src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(
-                song.instrumental_url
+                song.instrumental_url || song.soundcloud_url || ''
               )}&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=true`}
             />
           </div>
@@ -726,12 +846,12 @@ export default function Teleprompter({ song, lyrics }: Props) {
             <>
               <button
                 onClick={isPlaying ? handlePause : handlePlay}
-                disabled={!widget}
+                disabled={!isPlayerReady}
                 className="group relative p-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 title={isPlaying ? 'Stop' : 'Play'}
               >
                 <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-300 ${
-                  !widget ? 'text-slate-700' : 'text-slate-400 group-hover:text-green-500 group-hover:scale-110'
+                  !isPlayerReady ? 'text-slate-700' : 'text-slate-400 group-hover:text-green-500 group-hover:scale-110'
                 }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   {isPlaying ? (
                     <rect x="6" y="4" width="4" height="16" rx="1" />
@@ -743,24 +863,24 @@ export default function Teleprompter({ song, lyrics }: Props) {
               </button>
               <button
                 onClick={handleReset}
-                disabled={!widget}
+                disabled={!isPlayerReady}
                 className="group p-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 title="Reset"
               >
                 <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-500 ${
-                  !widget ? 'text-slate-700' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110 group-hover:rotate-180'
+                  !isPlayerReady ? 'text-slate-700' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110 group-hover:rotate-180'
                 }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </button>
               <button
                 onClick={() => setSyncMode(!syncMode)}
-                disabled={!widget || editMode}
+                disabled={!isPlayerReady || editMode}
                 className="group p-3 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 title={syncMode ? 'Exit Sync Mode' : 'Sync Mode'}
               >
                 <svg className={`w-7 h-7 md:w-6 md:h-6 transition-all duration-300 ${
-                  !widget || editMode ? 'text-slate-700' :
+                  !isPlayerReady || editMode ? 'text-slate-700' :
                   syncMode ? 'text-red-500 scale-110' : 'text-slate-400 group-hover:text-purple-400 group-hover:scale-110'
                 }`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="9" />
@@ -938,7 +1058,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
             >
               <button
                 onClick={isPlaying ? handlePause : handlePlay}
-                disabled={!widget}
+                disabled={!isPlayerReady}
                 className="p-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl transition-all duration-200 hover:scale-105"
                 title={isPlaying ? 'Pause' : 'Play'}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -956,7 +1076,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
               </button>
               <button
                 onClick={handleReset}
-                disabled={!widget}
+                disabled={!isPlayerReady}
                 className="p-3 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white rounded-xl transition-all duration-200 hover:scale-105"
                 title="Restart"
                 aria-label="Restart"
@@ -967,7 +1087,7 @@ export default function Teleprompter({ song, lyrics }: Props) {
               </button>
               <button
                 onClick={() => setSyncMode(!syncMode)}
-                disabled={!widget || editMode}
+                disabled={!isPlayerReady || editMode}
                 className={`p-3 ${syncMode ? 'bg-red-500/50 hover:bg-red-500/70' : 'bg-white/10 hover:bg-white/20'} disabled:opacity-50 text-white rounded-xl transition-all duration-200 hover:scale-105`}
                 title={syncMode ? 'Exit Sync Mode' : 'Sync Mode'}
                 aria-label={syncMode ? 'Exit Sync Mode' : 'Sync Mode'}
