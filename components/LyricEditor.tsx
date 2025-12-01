@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import AudioUploader from './AudioUploader';
 
 type Song = {
   _id: string;
@@ -119,6 +120,12 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
   // Drag and drop state
   const [draggedLine, setDraggedLine] = useState<LyricLine | null>(null);
+
+  // Input mode: 'upload' (MP3) or 'paste' (manual text)
+  const [inputMode, setInputMode] = useState<'upload' | 'paste'>('upload');
+
+  // Audio URL from upload
+  const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
 
   const defaultTags = ['confident', 'needs practice'];
   const tagColors = ['purple', 'blue', 'green', 'red', 'orange', 'pink', 'cyan', 'yellow'];
@@ -713,6 +720,43 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     onLyricsChange(updatedLyrics);
   };
 
+  // Handle lyrics from AudioUploader
+  const handleAudioLyricsReady = (
+    extractedLyrics: string,
+    processedLyrics?: { lines: Array<{ text: string; lineNumber: number; section?: string }> },
+    audioUrl?: string
+  ) => {
+    // Store the audio URL for potential playback
+    if (audioUrl) {
+      setUploadedAudioUrl(audioUrl);
+      // Also set as instrumental URL if no soundcloud URL is set
+      if (!soundcloudUrl) {
+        setInstrumentalUrl(audioUrl);
+      }
+    }
+
+    // Set the raw lyrics text
+    setRawLyrics(extractedLyrics);
+
+    // Convert to lyric lines
+    const lines = extractedLyrics
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    const newLyrics: LyricLine[] = lines.map((text, index) => ({
+      _id: crypto.randomUUID(),
+      song_id: song?._id || '',
+      line_number: index,
+      text,
+      timestamp_ms: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+
+    onLyricsChange(newLyrics);
+  };
+
   const addTag = (tag: string) => {
     if (tag.trim() && !tags.includes(tag.trim())) {
       setTags([...tags, tag.trim()]);
@@ -1001,115 +1045,165 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
       {lyrics.length === 0 ? (
         <div>
-          <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Paste Lyrics
-          </label>
-          <textarea
-            value={rawLyrics}
-            onChange={e => setRawLyrics(e.target.value)}
-            onPaste={handlePaste}
-            className="w-full h-48 md:h-64 px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono text-sm md:text-base transition-all duration-300"
-            placeholder="Paste your lyrics here..."
-          />
-          {showProcessSuggestion && (
-            <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center gap-3">
-              <div className="flex-shrink-0">
-                <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          {/* Input Mode Toggle */}
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => setInputMode('upload')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                inputMode === 'upload'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-base-200 text-base-content/70 hover:bg-base-300'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3v11.25" />
+              </svg>
+              <span className="text-sm font-medium">Upload MP3</span>
+            </button>
+            <button
+              onClick={() => setInputMode('paste')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                inputMode === 'paste'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-base-200 text-base-content/70 hover:bg-base-300'
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span className="text-sm font-medium">Paste Lyrics</span>
+            </button>
+          </div>
+
+          {/* MP3 Upload Mode */}
+          {inputMode === 'upload' && (
+            <div>
+              <AudioUploader
+                onLyricsReady={handleAudioLyricsReady}
+                onCancel={() => setInputMode('paste')}
+                songTitle={title}
+                artistName={availableBands.find(b => b._id === selectedBandId)?.name}
+              />
+              <p className="text-xs text-base-content/50 text-center mt-4">
+                Upload your song and AI will extract and format the lyrics automatically
+              </p>
+            </div>
+          )}
+
+          {/* Manual Paste Mode */}
+          {inputMode === 'paste' && (
+            <div>
+              <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-purple-800">AI Processing Recommended</p>
-                <p className="text-xs text-purple-600">{processSuggestionReason}</p>
-              </div>
-              <button
-                onClick={handleSmartProcess}
-                disabled={smartProcessing}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-              >
-                {smartProcessing ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                Paste Lyrics
+              </label>
+              <textarea
+                value={rawLyrics}
+                onChange={e => setRawLyrics(e.target.value)}
+                onPaste={handlePaste}
+                className="w-full h-48 md:h-64 px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono text-sm md:text-base transition-all duration-300"
+                placeholder="Paste your lyrics here..."
+              />
+              {showProcessSuggestion && (
+                <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center gap-3">
+                  <div className="flex-shrink-0">
+                    <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-purple-800">AI Processing Recommended</p>
+                    <p className="text-xs text-purple-600">{processSuggestionReason}</p>
+                  </div>
+                  <button
+                    onClick={handleSmartProcess}
+                    disabled={smartProcessing}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {smartProcessing ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                          <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                        </svg>
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Smart Process
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowProcessSuggestion(false)}
+                    className="p-1 text-purple-400 hover:text-purple-600 transition-colors"
+                    title="Dismiss"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              <div className="flex gap-2 mt-4 items-center">
+                <button
+                  onClick={handleSmartProcess}
+                  disabled={smartProcessing}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                    smartProcessing
+                      ? 'bg-purple-100 text-purple-400'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                  }`}
+                  title={smartProcessing ? 'Processing...' : 'Smart AI Process - Analyzes structure, adds sections, optimizes for teleprompter'}
+                >
+                  {smartProcessing ? (
+                    <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
                       <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
                     </svg>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  )}
+                  <span className="text-sm font-medium">{smartProcessing ? 'Processing...' : 'Smart Process'}</span>
+                </button>
+                <div className="h-6 w-px bg-base-300" />
+                <button
+                  onClick={handleAIFormat}
+                  disabled={aiLoading}
+                  className={`p-2 transition-all duration-200 ${
+                    aiLoading ? 'text-base-content/30' : 'text-base-content/70 hover:text-purple-600'
+                  }`}
+                  title={aiLoading ? 'Formatting...' : 'Quick AI Format'}
+                >
+                  {aiLoading ? (
+                    <svg className="w-7 h-7 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  ) : (
+                    <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    Smart Process
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => setShowProcessSuggestion(false)}
-                className="p-1 text-purple-400 hover:text-purple-600 transition-colors"
-                title="Dismiss"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+                  )}
+                </button>
+                <button
+                  onClick={handleBreakIntoLines}
+                  className="p-2 text-base-content/70 hover:text-purple-600 transition-all duration-200"
+                  title="Break into Lines"
+                >
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
             </div>
           )}
-          <div className="flex gap-2 mt-4 items-center">
-            <button
-              onClick={handleSmartProcess}
-              disabled={smartProcessing}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                smartProcessing
-                  ? 'bg-purple-100 text-purple-400'
-                  : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
-              title={smartProcessing ? 'Processing...' : 'Smart AI Process - Analyzes structure, adds sections, optimizes for teleprompter'}
-            >
-              {smartProcessing ? (
-                <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                </svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              )}
-              <span className="text-sm font-medium">{smartProcessing ? 'Processing...' : 'Smart Process'}</span>
-            </button>
-            <div className="h-6 w-px bg-base-300" />
-            <button
-              onClick={handleAIFormat}
-              disabled={aiLoading}
-              className={`p-2 transition-all duration-200 ${
-                aiLoading ? 'text-base-content/30' : 'text-base-content/70 hover:text-purple-600'
-              }`}
-              title={aiLoading ? 'Formatting...' : 'Quick AI Format'}
-            >
-              {aiLoading ? (
-                <svg className="w-7 h-7 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              ) : (
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              )}
-            </button>
-            <button
-              onClick={handleBreakIntoLines}
-              className="p-2 text-base-content/70 hover:text-purple-600 transition-all duration-200"
-              title="Break into Lines"
-            >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
         </div>
       ) : (
         <div>

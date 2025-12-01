@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import SoundCloudImportModal from './SoundCloudImportModal';
+import SongImportModal from './SongImportModal';
 
 type Band = {
   _id: string;
@@ -568,24 +568,24 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
           {activeSection === 'integrations' && (
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg font-semibold text-base-content mb-4">Integrations</h3>
+                <h3 className="text-lg font-semibold text-base-content mb-4">Import Songs</h3>
                 <p className="text-sm text-base-content/60 mb-6">
-                  Import content from external services
+                  Import songs from your favorite music services by pasting a song URL
                 </p>
 
-                {/* SoundCloud Integration */}
+                {/* Import from URL */}
                 <div className="border border-base-300 rounded-lg p-4 mb-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
-                        <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M7 17.939h-1v-8.068c.308-.231.639-.429 1-.566v8.634zm3 0h1v-9.224c-.229.265-.443.548-.621.857l-.379-.184v8.551zm-2 0h1v-8.848c-.508-.079-.623-.05-1-.01v8.858zm-4 0h1v-7.02c-.312.458-.555.971-.692 1.535l-.308-.182v5.667zm-3-5.25c-.606.547-1 1.354-1 2.268 0 .914.394 1.721 1 2.268v-4.536zm18.879-.671c-.204-2.837-2.404-5.079-5.117-5.079-1.022 0-1.964.328-2.762.877v10.123h9.089c1.607 0 2.911-1.393 2.911-3.106 0-2.043-2.061-3.15-4.121-2.815z"/>
+                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
                         </svg>
                       </div>
                       <div>
-                        <h4 className="font-semibold text-base-content">SoundCloud</h4>
+                        <h4 className="font-semibold text-base-content">Import from URL</h4>
                         <p className="text-sm text-base-content/60">
-                          Import tracks and playlists by URL
+                          SoundCloud, Spotify, Deezer, YouTube
                         </p>
                       </div>
                     </div>
@@ -595,6 +595,45 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                     >
                       Import
                     </button>
+                  </div>
+                </div>
+
+                {/* Supported Services Info */}
+                <div className="bg-base-200 rounded-lg p-4">
+                  <h4 className="text-sm font-semibold text-base-content mb-3">Supported Services</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-orange-500 rounded flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M7 17.939h-1v-8.068c.308-.231.639-.429 1-.566v8.634zm3 0h1v-9.224c-.229.265-.443.548-.621.857l-.379-.184v8.551zm-2 0h1v-8.848c-.508-.079-.623-.05-1-.01v8.858zm-4 0h1v-7.02c-.312.458-.555.971-.692 1.535l-.308-.182v5.667zm-3-5.25c-.606.547-1 1.354-1 2.268 0 .914.394 1.721 1 2.268v-4.536zm18.879-.671c-.204-2.837-2.404-5.079-5.117-5.079-1.022 0-1.964.328-2.762.877v10.123h9.089c1.607 0 2.911-1.393 2.911-3.106 0-2.043-2.061-3.15-4.121-2.815z"/>
+                        </svg>
+                      </div>
+                      <span className="text-sm text-base-content">SoundCloud</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-green-500 rounded flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                        </svg>
+                      </div>
+                      <span className="text-sm text-base-content">Spotify</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-amber-500 rounded flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M18.81 4.16v3.03H24V4.16h-5.19zM6.27 8.38v3.027h5.189V8.38h-5.19zm12.54 0v3.027H24V8.38h-5.19zM6.27 12.592v3.027h5.189v-3.027h-5.19zm6.27 0v3.027h5.19v-3.027h-5.19zm6.27 0v3.027H24v-3.027h-5.19zM0 16.81v3.029h5.19v-3.03H0zm6.27 0v3.029h5.189v-3.03h-5.19zm6.27 0v3.029h5.19v-3.03h-5.19zm6.27 0v3.029H24v-3.03h-5.19z"/>
+                        </svg>
+                      </div>
+                      <span className="text-sm text-base-content">Deezer</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-red-500 rounded flex items-center justify-center">
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                        </svg>
+                      </div>
+                      <span className="text-sm text-base-content">YouTube</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -668,8 +707,8 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
         </div>
       </div>
 
-      {/* SoundCloud Import Modal */}
-      <SoundCloudImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />
+      {/* Song Import Modal */}
+      <SongImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />
     </div>
   );
 }
