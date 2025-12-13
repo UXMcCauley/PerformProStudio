@@ -3,6 +3,7 @@ import { detectMusicUrl, getServiceDisplayName } from '@/lib/url-detector';
 import { getTrackInfoFromUrl } from '@/lib/soundcloud';
 import * as spotify from '@/lib/spotify';
 import * as deezer from '@/lib/deezer';
+import { lrclib, ParsedLyricLine } from '@/lib/lrclib';
 
 export interface ImportedTrack {
   title: string;
@@ -13,6 +14,12 @@ export interface ImportedTrack {
   url: string;
   service: string;
   serviceDisplayName: string;
+}
+
+export interface ImportedLyrics {
+  synced: ParsedLyricLine[] | null;
+  plain: string[] | null;
+  source: string;
 }
 
 // Fetch track info from YouTube using oEmbed
@@ -197,9 +204,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Try to fetch lyrics from LRCLIB
+    let lyrics: ImportedLyrics | null = null;
+    try {
+      const lyricsResult = await lrclib.getLyrics(
+        trackInfo.title,
+        trackInfo.artist,
+        trackInfo.album,
+        trackInfo.duration
+      );
+
+      if (lyricsResult) {
+        lyrics = lyricsResult;
+      }
+    } catch (lyricsError) {
+      console.error('Error fetching lyrics:', lyricsError);
+      // Don't fail the import if lyrics fetch fails
+    }
+
     return NextResponse.json({
       success: true,
       track: trackInfo,
+      lyrics,
     });
   } catch (error) {
     console.error('Error processing import URL:', error);

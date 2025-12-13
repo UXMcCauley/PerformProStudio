@@ -186,6 +186,72 @@ export function formatTranscriptAsLyrics(result: TranscriptionResult): string {
 }
 
 /**
+ * Timed line interface for syncing lyrics with audio
+ */
+export interface TimedLine {
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
+/**
+ * Format transcription into timed lines for teleprompter sync
+ * Groups words into natural phrases with start/end timestamps
+ */
+export function formatTranscriptAsTimedLines(result: TranscriptionResult): TimedLine[] {
+  if (!result.words || result.words.length === 0) {
+    // Fallback: split transcript into lines without timestamps
+    return result.transcript.split('\n').filter(line => line.trim()).map(text => ({
+      text,
+      startMs: 0,
+      endMs: 0,
+    }));
+  }
+
+  const lines: TimedLine[] = [];
+  let currentLine: TranscriptionWord[] = [];
+  let lastEndTime = 0;
+
+  for (const word of result.words) {
+    const text = word.punctuated_word || word.word;
+
+    // Start new line if:
+    // 1. Gap > 0.8 seconds (natural pause)
+    // 2. Previous word ended with sentence-ending punctuation
+    // 3. Current line is getting long (> 10 words)
+    const gap = word.start - lastEndTime;
+    const lastWord = currentLine[currentLine.length - 1];
+    const lastWordText = lastWord?.punctuated_word || lastWord?.word || '';
+    const endsWithPunctuation = /[.!?]$/.test(lastWordText);
+    const lineIsTooLong = currentLine.length >= 10;
+
+    if (currentLine.length > 0 && (gap > 0.8 || endsWithPunctuation || lineIsTooLong)) {
+      // Save current line
+      lines.push({
+        text: currentLine.map(w => w.punctuated_word || w.word).join(' '),
+        startMs: Math.round(currentLine[0].start * 1000),
+        endMs: Math.round(currentLine[currentLine.length - 1].end * 1000),
+      });
+      currentLine = [];
+    }
+
+    currentLine.push(word);
+    lastEndTime = word.end;
+  }
+
+  // Add remaining words
+  if (currentLine.length > 0) {
+    lines.push({
+      text: currentLine.map(w => w.punctuated_word || w.word).join(' '),
+      startMs: Math.round(currentLine[0].start * 1000),
+      endMs: Math.round(currentLine[currentLine.length - 1].end * 1000),
+    });
+  }
+
+  return lines;
+}
+
+/**
  * Estimate song tempo from word timing
  */
 export function estimateTempo(result: TranscriptionResult): number {

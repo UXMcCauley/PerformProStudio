@@ -53,6 +53,22 @@ interface SessionWithData extends PracticeSession {
   totalTakes?: number;
 }
 
+type MetricsView = 'overall' | 'by-album' | 'by-song';
+
+interface AlbumStats {
+  albumName: string;
+  songCount: number;
+  completedCount: number;
+  totalPracticeTime: number;
+  sessionCount: number;
+}
+
+interface SongStats {
+  song: Song;
+  practiceTime: number;
+  sessionCount: number;
+}
+
 export default function SongMetrics({ song, lyrics, onBack, showBackButton = false, onSelectSong }: Props) {
   const [sessions, setSessions] = useState<SessionWithData[]>([]);
   const [takesPerLine, setTakesPerLine] = useState<Record<string, number>>({});
@@ -63,14 +79,113 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
   const [albumFilter, setAlbumFilter] = useState<string>('all');
   const [folderFilter, setFolderFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [metricsView, setMetricsView] = useState<MetricsView>('overall');
+  const [allSessions, setAllSessions] = useState<PracticeSession[]>([]);
+  const [selectedAlbum, setSelectedAlbum] = useState<string | null>(null);
 
   useEffect(() => {
     loadAllSongs();
+    loadAllSessions();
     if (song) {
       setSelectedSongId(song._id);
       loadMetrics();
+      setMetricsView('by-song');
     }
   }, [song]);
+
+  const loadAllSessions = async () => {
+    try {
+      const response = await fetch('/api/practice?type=all-sessions');
+      if (response.ok) {
+        const data = await response.json();
+        setAllSessions(data || []);
+      }
+    } catch (error) {
+      console.error('Error loading all sessions:', error);
+    }
+    setLoading(false);
+  };
+
+  // Compute overall stats
+  const getOverallStats = () => {
+    const totalSongs = allSongs.length;
+    const completedSongs = allSongs.filter(s => s.completed).length;
+    const totalPracticeTime = allSessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+    const totalSessions = allSessions.length;
+    const completedSessions = allSessions.filter(s => s.completed).length;
+
+    return {
+      totalSongs,
+      completedSongs,
+      totalPracticeTime,
+      totalSessions,
+      completedSessions,
+    };
+  };
+
+  // Compute album stats
+  const getAlbumStats = (): AlbumStats[] => {
+    const albumMap = new Map<string, AlbumStats>();
+
+    // Group songs by album
+    allSongs.forEach(song => {
+      const albumName = song.album || 'No Album';
+      if (!albumMap.has(albumName)) {
+        albumMap.set(albumName, {
+          albumName,
+          songCount: 0,
+          completedCount: 0,
+          totalPracticeTime: 0,
+          sessionCount: 0,
+        });
+      }
+      const stats = albumMap.get(albumName)!;
+      stats.songCount++;
+      if (song.completed) stats.completedCount++;
+    });
+
+    // Add session data
+    allSessions.forEach(session => {
+      const song = allSongs.find(s => s._id === session.song_id);
+      const albumName = song?.album || 'No Album';
+      const stats = albumMap.get(albumName);
+      if (stats) {
+        stats.totalPracticeTime += session.duration_seconds || 0;
+        stats.sessionCount++;
+      }
+    });
+
+    return Array.from(albumMap.values()).sort((a, b) => b.totalPracticeTime - a.totalPracticeTime);
+  };
+
+  // Compute per-song stats
+  const getSongStats = (): SongStats[] => {
+    return allSongs.map(song => {
+      const songSessions = allSessions.filter(s => s.song_id === song._id);
+      const practiceTime = songSessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+      return {
+        song,
+        practiceTime,
+        sessionCount: songSessions.length,
+      };
+    }).sort((a, b) => b.practiceTime - a.practiceTime);
+  };
+
+  // Get songs for a specific album
+  const getSongsForAlbum = (albumName: string): SongStats[] => {
+    const albumSongs = allSongs.filter(s =>
+      albumName === 'No Album' ? !s.album : s.album === albumName
+    );
+    return albumSongs.map(song => {
+      const songSessions = allSessions.filter(s => s.song_id === song._id);
+      const practiceTime = songSessions.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+      return {
+        song,
+        practiceTime,
+        sessionCount: songSessions.length,
+      };
+    }).sort((a, b) => b.practiceTime - a.practiceTime);
+  };
 
   const handleSelectSong = async (selectedSong: Song) => {
     try {
@@ -289,6 +404,316 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
     );
   };
 
+  // Render Overall View
+  const renderOverallView = () => {
+    const stats = getOverallStats();
+
+    return (
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-linear-to-br from-emerald-50 to-green-50 border border-emerald-200/50 rounded-2xl p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+              </svg>
+            </div>
+            <div className="text-2xl md:text-3xl font-bold text-emerald-600">{stats.totalSongs}</div>
+            <div className="text-sm text-emerald-600/70">Total Songs</div>
+          </div>
+
+          <div className="bg-linear-to-br from-green-50 to-emerald-50 border border-green-200/50 rounded-2xl p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="text-2xl md:text-3xl font-bold text-green-600">{stats.completedSongs}</div>
+            <div className="text-sm text-green-600/70">Completed</div>
+          </div>
+
+          <div className="bg-linear-to-br from-purple-50 to-pink-50 border border-purple-200/50 rounded-2xl p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="text-2xl md:text-3xl font-bold text-purple-600">{formatDuration(stats.totalPracticeTime)}</div>
+            <div className="text-sm text-purple-600/70">Total Practice</div>
+          </div>
+
+          <div className="bg-linear-to-br from-blue-50 to-indigo-50 border border-blue-200/50 rounded-2xl p-4 md:p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <svg className="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75z" />
+              </svg>
+            </div>
+            <div className="text-2xl md:text-3xl font-bold text-blue-600">{stats.totalSessions}</div>
+            <div className="text-sm text-blue-600/70">Sessions</div>
+          </div>
+        </div>
+
+        {/* Progress Overview */}
+        <div className="bg-base-100 border border-base-300 rounded-2xl p-4 md:p-6">
+          <h3 className="text-lg font-bold text-base-content mb-4">Overall Progress</h3>
+          <div className="mb-2 flex justify-between text-sm">
+            <span className="text-base-content/70">Songs Completed</span>
+            <span className="font-medium">{stats.completedSongs} / {stats.totalSongs}</span>
+          </div>
+          <div className="w-full bg-base-300 rounded-full h-4 overflow-hidden">
+            <div
+              className="bg-linear-to-r from-green-500 to-emerald-500 h-4 rounded-full transition-all duration-500"
+              style={{ width: `${stats.totalSongs > 0 ? (stats.completedSongs / stats.totalSongs) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Top Practiced Songs */}
+        <div className="bg-base-100 border border-base-300 rounded-2xl p-4 md:p-6">
+          <h3 className="text-lg font-bold text-base-content mb-4">Top Practiced Songs</h3>
+          {getSongStats().slice(0, 10).map((stat, index) => (
+            <div
+              key={stat.song._id}
+              onClick={() => handleSelectSong(stat.song)}
+              className="flex items-center gap-4 p-3 hover:bg-base-200 rounded-xl cursor-pointer transition-colors"
+            >
+              <span className="text-lg font-bold text-purple-500 w-8">#{index + 1}</span>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-base-content truncate">{stat.song.title}</div>
+                <div className="text-sm text-base-content/60 truncate">{stat.song.artist}</div>
+              </div>
+              <div className="text-right">
+                <div className="font-medium text-purple-600">{formatDuration(stat.practiceTime)}</div>
+                <div className="text-xs text-base-content/60">{stat.sessionCount} sessions</div>
+              </div>
+            </div>
+          ))}
+          {getSongStats().length === 0 && (
+            <p className="text-center text-base-content/60 py-8">No practice data yet</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render By Album View
+  const renderByAlbumView = () => {
+    if (selectedAlbum) {
+      const albumSongs = getSongsForAlbum(selectedAlbum);
+      const albumStats = getAlbumStats().find(a => a.albumName === selectedAlbum);
+
+      return (
+        <div className="space-y-6">
+          {/* Back Button */}
+          <button
+            onClick={() => setSelectedAlbum(null)}
+            className="flex items-center gap-2 text-purple-600 hover:text-purple-700 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Albums
+          </button>
+
+          {/* Album Header */}
+          <div className="bg-linear-to-r from-purple-50 to-pink-50 border border-purple-200/50 rounded-2xl p-6">
+            <h3 className="text-2xl font-bold text-base-content mb-2">{selectedAlbum}</h3>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <span className="text-purple-600">{albumStats?.songCount || 0} songs</span>
+              <span className="text-green-600">{albumStats?.completedCount || 0} completed</span>
+              <span className="text-blue-600">{formatDuration(albumStats?.totalPracticeTime || 0)} practice time</span>
+              <span className="text-indigo-600">{albumStats?.sessionCount || 0} sessions</span>
+            </div>
+          </div>
+
+          {/* Songs in Album */}
+          <div className="bg-base-100 border border-base-300 rounded-2xl p-4 md:p-6">
+            <h3 className="text-lg font-bold text-base-content mb-4">Songs</h3>
+            {albumSongs.map((stat, index) => (
+              <div
+                key={stat.song._id}
+                onClick={() => handleSelectSong(stat.song)}
+                className="flex items-center gap-4 p-3 hover:bg-base-200 rounded-xl cursor-pointer transition-colors"
+              >
+                <span className="text-lg font-bold text-purple-500 w-8">#{index + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-base-content truncate">{stat.song.title}</div>
+                  <div className="text-sm text-base-content/60 truncate">{stat.song.artist}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {stat.song.completed && (
+                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-lg">Complete</span>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className="font-medium text-purple-600">{formatDuration(stat.practiceTime)}</div>
+                  <div className="text-xs text-base-content/60">{stat.sessionCount} sessions</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    const albumStats = getAlbumStats();
+
+    return (
+      <div className="space-y-6">
+        {/* Album Grid */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {albumStats.map(album => (
+            <div
+              key={album.albumName}
+              onClick={() => setSelectedAlbum(album.albumName)}
+              className="bg-base-100 border border-base-300 rounded-2xl p-5 hover:shadow-lg hover:border-purple-300 transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-base-content truncate">{album.albumName}</h4>
+                  <p className="text-sm text-base-content/60">{album.songCount} songs</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-base-content/70">Completed</span>
+                  <span className="font-medium text-green-600">{album.completedCount}/{album.songCount}</span>
+                </div>
+                <div className="w-full bg-base-300 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all"
+                    style={{ width: `${album.songCount > 0 ? (album.completedCount / album.songCount) * 100 : 0}%` }}
+                  />
+                </div>
+
+                <div className="flex justify-between text-sm pt-2">
+                  <span className="text-purple-600">{formatDuration(album.totalPracticeTime)}</span>
+                  <span className="text-blue-600">{album.sessionCount} sessions</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {albumStats.length === 0 && (
+          <div className="text-center py-12">
+            <svg className="w-12 h-12 text-base-content/30 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303" />
+            </svg>
+            <p className="text-base-content/60">No albums found</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render By Song View (song selection)
+  const renderBySongView = () => {
+    return (
+      <div className="space-y-6">
+        {/* Search and Filters */}
+        <div className="space-y-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search songs, artists, albums..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-base-100 border border-base-300 text-base-content focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 rounded-xl"
+            />
+            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+            </svg>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <select
+              value={albumFilter}
+              onChange={e => setAlbumFilter(e.target.value)}
+              className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-hidden focus:border-purple-500 rounded-lg"
+            >
+              <option value="all">All Albums</option>
+              {albums.map(album => (
+                <option key={album} value={album}>{album}</option>
+              ))}
+            </select>
+
+            <select
+              value={folderFilter}
+              onChange={e => setFolderFilter(e.target.value)}
+              className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-hidden focus:border-purple-500 rounded-lg"
+            >
+              <option value="all">All Folders</option>
+              {folders.map(folder => (
+                <option key={folder} value={folder}>{folder}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Song Grid */}
+        {filteredSongs.length === 0 ? (
+          <div className="text-center py-12">
+            <svg className="w-12 h-12 text-base-content/30 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+            </svg>
+            <p className="text-base-content/60">No songs found</p>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredSongs.map(songItem => {
+              const songStats = getSongStats().find(s => s.song._id === songItem._id);
+              return (
+                <div
+                  key={songItem._id}
+                  onClick={() => handleSelectSong(songItem)}
+                  className="group border border-base-300 p-4 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/10 bg-base-100 hover:border-purple-300 cursor-pointer rounded-xl"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-base-content truncate group-hover:text-purple-700 transition-colors">
+                        {songItem.title}
+                      </h4>
+                      <p className="text-sm text-base-content/70 truncate">{songItem.artist}</p>
+                      <div className="flex items-center gap-2 mt-2 text-xs">
+                        {songStats && songStats.practiceTime > 0 && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-lg">
+                            {formatDuration(songStats.practiceTime)}
+                          </span>
+                        )}
+                        {songItem.completed && (
+                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded-lg">
+                            Complete
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <svg className="w-5 h-5 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Main Tabs View (when no song is selected)
   if (!song) {
     return (
       <div className="bg-base-100 shadow-lg border border-base-300 p-4 md:p-6">
@@ -305,120 +730,47 @@ export default function SongMetrics({ song, lyrics, onBack, showBackButton = fal
             </button>
           )}
           <div className="w-1 h-8 bg-purple-600" />
-          <h2 className="text-xl md:text-2xl font-bold text-base-content">Song Metrics</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-base-content">Analytics</h2>
         </div>
 
-        {/* Song Selection Interface */}
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <svg className="w-16 h-16 text-purple-500 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-            </svg>
-            <h3 className="text-2xl font-bold text-base-content mb-2">Select a Song</h3>
-            <p className="text-base-content/60">Choose a song to view its practice metrics and analytics</p>
-          </div>
-
-          {/* Search and Filters */}
-          <div className="mb-6 space-y-4">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search songs, artists, albums..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-base-100 border border-base-300 text-base-content focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
-                style={{borderRadius: '4px'}}
-              />
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-7 h-7 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="8" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
-              </svg>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <select
-                value={albumFilter}
-                onChange={e => setAlbumFilter(e.target.value)}
-                className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-hidden focus:border-purple-500"
-                style={{borderRadius: '4px'}}
-              >
-                <option value="all">All Albums</option>
-                {albums.map(album => (
-                  <option key={album} value={album}>{album}</option>
-                ))}
-              </select>
-
-              <select
-                value={folderFilter}
-                onChange={e => setFolderFilter(e.target.value)}
-                className="px-3 py-2 border border-base-300 bg-base-100 text-base-content text-sm focus:outline-hidden focus:border-purple-500"
-                style={{borderRadius: '4px'}}
-              >
-                <option value="all">All Folders</option>
-                {folders.map(folder => (
-                  <option key={folder} value={folder}>{folder}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Song Grid */}
-          {filteredSongs.length === 0 ? (
-            <div className="text-center py-12">
-              <svg className="w-12 h-12 text-base-content/30 mx-auto mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-              </svg>
-              <p className="text-base-content/60">No songs found</p>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredSongs.map(songItem => (
-                <div
-                  key={songItem._id}
-                  onClick={() => handleSelectSong(songItem)}
-                  className="group border border-base-300 p-4 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/10 bg-base-100 hover:border-purple-300 cursor-pointer"
-                  style={{borderRadius: '4px'}}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-purple-100 text-purple-600 transition-colors" style={{borderRadius: '4px'}}>
-                      <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-base-content truncate group-hover:text-purple-700 transition-colors">
-                        {songItem.title}
-                      </h4>
-                      <p className="text-sm text-base-content/70 truncate">{songItem.artist}</p>
-                      <div className="flex items-center gap-2 mt-2 text-xs text-base-content/60">
-                        {songItem.album && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-700 border border-blue-200" style={{borderRadius: '4px'}}>
-                            {songItem.album}
-                          </span>
-                        )}
-                        {songItem.folder && (
-                          <span className="px-2 py-1 bg-orange-100 text-orange-700 border border-orange-200" style={{borderRadius: '4px'}}>
-                            📁 {songItem.folder}
-                          </span>
-                        )}
-                        {songItem.completed && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 border border-green-200" style={{borderRadius: '4px'}}>
-                            ✓ Complete
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      <svg className="w-7 h-7 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* View Tabs */}
+        <div className="flex gap-2 mb-6 border-b border-base-300 pb-4">
+          <button
+            onClick={() => { setMetricsView('overall'); setSelectedAlbum(null); }}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              metricsView === 'overall'
+                ? 'bg-purple-600 text-white'
+                : 'bg-base-200 text-base-content/70 hover:bg-base-300'
+            }`}
+          >
+            Overall
+          </button>
+          <button
+            onClick={() => { setMetricsView('by-album'); setSelectedAlbum(null); }}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              metricsView === 'by-album'
+                ? 'bg-purple-600 text-white'
+                : 'bg-base-200 text-base-content/70 hover:bg-base-300'
+            }`}
+          >
+            By Album
+          </button>
+          <button
+            onClick={() => setMetricsView('by-song')}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              metricsView === 'by-song'
+                ? 'bg-purple-600 text-white'
+                : 'bg-base-200 text-base-content/70 hover:bg-base-300'
+            }`}
+          >
+            By Song
+          </button>
         </div>
+
+        {/* Render Current View */}
+        {metricsView === 'overall' && renderOverallView()}
+        {metricsView === 'by-album' && renderByAlbumView()}
+        {metricsView === 'by-song' && renderBySongView()}
       </div>
     );
   }

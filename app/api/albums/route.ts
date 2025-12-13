@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getBandAlbums, createAlbum, deleteAlbum, getDb } from '@/lib/mongodb';
+import { canAccessBand, canEditBand } from '@/lib/social';
 import { ObjectId } from 'mongodb';
 
 export async function GET(request: Request) {
@@ -18,15 +19,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Band ID is required' }, { status: 400 });
     }
 
-    // Verify the band belongs to the user
-    const db = await getDb();
-    const band = await db.collection('bands').findOne({
-      _id: new ObjectId(bandId),
-      user_id: session.user.id
-    });
-
-    if (!band) {
-      return NextResponse.json({ error: 'Band not found' }, { status: 404 });
+    // Verify user is a member of the band
+    const hasAccess = await canAccessBand(bandId, session.user.id);
+    if (!hasAccess) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     const albums = await getBandAlbums(bandId);
@@ -51,15 +47,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Band ID and name are required' }, { status: 400 });
     }
 
-    // Verify the band belongs to the user
-    const db = await getDb();
-    const band = await db.collection('bands').findOne({
-      _id: new ObjectId(bandId),
-      user_id: session.user.id
-    });
-
-    if (!band) {
-      return NextResponse.json({ error: 'Band not found' }, { status: 404 });
+    // Verify user can edit the band (owner or admin)
+    const canEdit = await canEditBand(bandId, session.user.id);
+    if (!canEdit) {
+      return NextResponse.json({ error: 'Only admins can create albums' }, { status: 403 });
     }
 
     const album = await createAlbum(bandId, name.trim());
@@ -89,7 +80,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Album ID is required' }, { status: 400 });
     }
 
-    // Verify the album belongs to a band owned by the user
+    // Get the album to find the band
     const db = await getDb();
     const album = await db.collection('albums').findOne({
       _id: new ObjectId(albumId)
@@ -99,13 +90,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Album not found' }, { status: 404 });
     }
 
-    const band = await db.collection('bands').findOne({
-      _id: new ObjectId(album.band_id),
-      user_id: session.user.id
-    });
-
-    if (!band) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Verify user can edit the band (owner or admin)
+    const canEdit = await canEditBand(album.band_id, session.user.id);
+    if (!canEdit) {
+      return NextResponse.json({ error: 'Only admins can delete albums' }, { status: 403 });
     }
 
     const success = await deleteAlbum(albumId);

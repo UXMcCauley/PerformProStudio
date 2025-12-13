@@ -18,11 +18,13 @@ type Song = {
   tags: string[];
   soundcloud_url: string | null;
   instrumental_url: string | null;
+  artwork_url: string | null;
   completed: boolean;
   band_id: string | null;
   album_id: string | null;
   folder_id: string | null;
   user_id: string;
+  display_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -37,6 +39,15 @@ type LyricLine = {
   updated_at: string;
 };
 
+type UserAlbum = {
+  _id: string;
+  name: string;
+  cover_art: string | null;
+  display_order: number;
+  song_count: number;
+  user_id: string;
+};
+
 interface Props {
   onSelectSong: (song: Song, lyrics: LyricLine[]) => void;
   onNewSong: () => void;
@@ -44,153 +55,82 @@ interface Props {
   onLyricSync?: (song: Song, lyrics: LyricLine[]) => void;
 }
 
+type ViewMode = 'all' | 'albums' | 'album-detail';
+
 export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, onLyricSync }: Props) {
   const [songs, setSongs] = useState<Song[]>([]);
+  const [albums, setAlbums] = useState<UserAlbum[]>([]);
+  const [albumArtMap, setAlbumArtMap] = useState<Map<string, string | null>>(new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [hoveredSong, setHoveredSong] = useState<string | null>(null);
-  const [filterByCompleted, setFilterByCompleted] = useState<'all' | 'completed' | 'incomplete'>('all');
-  const [filterByFolder, setFilterByFolder] = useState<string>('all');
-  const [filterByTag, setFilterByTag] = useState<string>('all');
-  const [filterByAlbum, setFilterByAlbum] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'updated_at' | 'title' | 'artist' | 'album'>('updated_at');
-  const [showCreateModal, setShowCreateModal] = useState<'song' | 'tag' | 'folder' | 'album' | null>(null);
-  const [newItemName, setNewItemName] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
+  const [selectedAlbum, setSelectedAlbum] = useState<UserAlbum | null>(null);
+  const [albumSongs, setAlbumSongs] = useState<Song[]>([]);
   const [reorderMode, setReorderMode] = useState(false);
 
-  // SoundCloud player state
-  const [playingSongId, setPlayingSongId] = useState<string | null>(null);
-  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [scWidget, setScWidget] = useState<any>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Drag state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  // Initialize SoundCloud widget when URL changes
-  useEffect(() => {
-    if (!playingUrl || !iframeRef.current) return;
+  // Album art upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingAlbumArt, setEditingAlbumArt] = useState<string | null>(null);
+  const [uploadingArt, setUploadingArt] = useState(false);
 
-    // Wait for SC API to be available
-    const initWidget = () => {
-      if (!window.SC?.Widget || !iframeRef.current) return;
-
-      try {
-        const widget = window.SC.Widget(iframeRef.current);
-        setScWidget(widget);
-
-        const handleReady = () => {
-          try {
-            widget.play();
-            setIsPlaying(true);
-          } catch (err) {
-            console.error('Error playing widget:', err);
-          }
-        };
-
-        const handlePlay = () => setIsPlaying(true);
-        const handlePause = () => setIsPlaying(false);
-        const handleFinish = () => {
-          setIsPlaying(false);
-          setPlayingSongId(null);
-          setPlayingUrl(null);
-        };
-
-        widget.bind(window.SC.Widget.Events.READY, handleReady);
-        widget.bind(window.SC.Widget.Events.PLAY, handlePlay);
-        widget.bind(window.SC.Widget.Events.PAUSE, handlePause);
-        widget.bind(window.SC.Widget.Events.FINISH, handleFinish);
-
-        return () => {
-          try {
-            widget.unbind(window.SC.Widget.Events.READY);
-            widget.unbind(window.SC.Widget.Events.PLAY);
-            widget.unbind(window.SC.Widget.Events.PAUSE);
-            widget.unbind(window.SC.Widget.Events.FINISH);
-          } catch (err) {
-            // Ignore cleanup errors
-          }
-        };
-      } catch (err) {
-        console.error('Error initializing SoundCloud widget:', err);
-      }
-    };
-
-    // Check if SC is already loaded
-    if (window.SC?.Widget) {
-      const cleanup = initWidget();
-      return cleanup;
-    }
-
-    // Wait for SC to load
-    const checkSC = setInterval(() => {
-      if (window.SC?.Widget) {
-        clearInterval(checkSC);
-        initWidget();
-      }
-    }, 100);
-
-    return () => {
-      clearInterval(checkSC);
-    };
-  }, [playingUrl]);
-
-  const handlePlayReference = (song: Song, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (!song.soundcloud_url) return;
-
-    if (playingSongId === song._id) {
-      // Toggle play/pause for same song
-      if (scWidget) {
-        try {
-          if (isPlaying) {
-            scWidget.pause();
-          } else {
-            scWidget.play();
-          }
-        } catch (err) {
-          console.error('Error toggling playback:', err);
-        }
-      }
-    } else {
-      // Play new song
-      setPlayingSongId(song._id);
-      setPlayingUrl(song.soundcloud_url);
-    }
-  };
-
-  const stopPlayback = () => {
-    try {
-      if (scWidget) {
-        scWidget.pause();
-      }
-    } catch (err) {
-      // Ignore errors when stopping
-    }
-    setScWidget(null);
-    setPlayingSongId(null);
-    setPlayingUrl(null);
-    setIsPlaying(false);
-  };
+  // Export menu
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   useEffect(() => {
-    loadSongs();
+    loadData();
   }, []);
 
-  const loadSongs = async () => {
+  const loadData = async () => {
     setLoading(true);
+    await Promise.all([loadSongs(), loadAlbums()]);
+    setLoading(false);
+  };
+
+  const loadSongs = async () => {
     try {
       const response = await fetch('/api/songs');
       if (response.ok) {
         const data = await response.json();
         setSongs(data || []);
-      } else {
-        console.error('Error loading songs');
       }
     } catch (error) {
       console.error('Error loading songs:', error);
     }
-    setLoading(false);
+  };
+
+  const loadAlbums = async () => {
+    try {
+      const response = await fetch('/api/user-albums');
+      if (response.ok) {
+        const data = await response.json();
+        setAlbums(data || []);
+        const artMap = new Map<string, string | null>();
+        for (const album of data || []) {
+          if (album.name) {
+            artMap.set(album.name, album.cover_art);
+          }
+        }
+        setAlbumArtMap(artMap);
+      }
+    } catch (error) {
+      console.error('Error loading albums:', error);
+    }
+  };
+
+  const loadAlbumSongs = async (albumName: string) => {
+    try {
+      const response = await fetch(`/api/user-albums?albumName=${encodeURIComponent(albumName)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setAlbumSongs(data.songs || []);
+      }
+    } catch (error) {
+      console.error('Error loading album songs:', error);
+    }
   };
 
   const handleSelectSong = async (song: Song) => {
@@ -199,655 +139,538 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewMetrics, on
       if (response.ok) {
         const data = await response.json();
         onSelectSong(song, data || []);
-      } else {
-        console.error('Error loading lyrics');
       }
     } catch (error) {
       console.error('Error loading lyrics:', error);
     }
   };
 
-  const handleLyricSync = async (song: Song) => {
-    try {
-      const response = await fetch(`/api/lyrics?songId=${song._id}`);
-      if (response.ok) {
-        const data = await response.json();
-        onLyricSync?.(song, data || []);
-      } else {
-        console.error('Error loading lyrics');
-      }
-    } catch (error) {
-      console.error('Error loading lyrics:', error);
-    }
+  const handleAlbumClick = async (album: UserAlbum) => {
+    if (reorderMode) return;
+    setSelectedAlbum(album);
+    setViewMode('album-detail');
+    await loadAlbumSongs(album.name);
   };
 
-  const handleDeleteSong = async (songId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this song?')) return;
+  const handleBackToAlbums = () => {
+    setSelectedAlbum(null);
+    setAlbumSongs([]);
+    setViewMode('albums');
+  };
+
+  const handleDeleteSong = async (e: React.MouseEvent, song: Song) => {
+    e.stopPropagation(); // Prevent song selection
+
+    if (!confirm(`Delete "${song.title}"? This will also delete all associated lyrics and cannot be undone.`)) {
+      return;
+    }
 
     try {
-      const response = await fetch(`/api/songs?id=${songId}`, {
+      const response = await fetch(`/api/songs?id=${song._id}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        setSongs(songs.filter(s => s._id !== songId));
+        // Remove from local state
+        setSongs(prev => prev.filter(s => s._id !== song._id));
+        setAlbumSongs(prev => prev.filter(s => s._id !== song._id));
       } else {
-        console.error('Error deleting song');
+        const data = await response.json();
+        alert(data.error || 'Failed to delete song');
       }
     } catch (error) {
       console.error('Error deleting song:', error);
+      alert('Failed to delete song');
     }
   };
 
-  const handleToggleCompleted = async (song: Song, e: React.MouseEvent) => {
-    e.stopPropagation();
-
+  const handleUploadArt = async (albumName: string, file: File) => {
+    setUploadingArt(true);
     try {
-      const response = await fetch('/api/songs', {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('albumName', albumName);
+
+      const uploadResponse = await fetch('/api/upload/album-art', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.json();
+        alert(error.error || 'Failed to upload album art');
+        return;
+      }
+
+      const uploadData = await uploadResponse.json();
+
+      await fetch('/api/user-albums', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: song._id, completed: !song.completed }),
+        body: JSON.stringify({ albumName, cover_art: uploadData.url }),
       });
 
-      if (response.ok) {
-        setSongs(songs.map(s => s._id === song._id ? { ...s, completed: !s.completed } : s));
-      } else {
-        console.error('Error toggling completed status');
+      await loadAlbums();
+      if (selectedAlbum) {
+        setSelectedAlbum({ ...selectedAlbum, cover_art: uploadData.url });
       }
     } catch (error) {
-      console.error('Error toggling completed status:', error);
+      console.error('Error uploading album art:', error);
+      alert('Failed to upload album art');
+    } finally {
+      setUploadingArt(false);
+      setEditingAlbumArt(null);
     }
   };
 
-  const handleDuplicateSong = async (song: Song, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && editingAlbumArt) {
+      handleUploadArt(editingAlbumArt, file);
+    }
+    e.target.value = '';
+  };
+
+  const handleExport = async (albumName: string, format: 'txt' | 'lrc' | 'json') => {
+    try {
+      const response = await fetch(`/api/export/album?albumName=${encodeURIComponent(albumName)}&format=${format}`);
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to export album');
+        return;
+      }
+
+      if (format === 'json') {
+        const data = await response.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${albumName}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        const text = await response.text();
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${albumName}.${format}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error('Error exporting album:', error);
+      alert('Failed to export album');
+    }
+    setShowExportMenu(false);
+  };
+
+  // Get artwork for a song (song's own artwork, or album artwork, or null)
+  const getSongArtwork = (song: Song): string | null => {
+    if (song.artwork_url) return song.artwork_url;
+    if (song.album) return albumArtMap.get(song.album) || null;
+    return null;
+  };
+
+  // Filter songs based on search
+  const filteredSongs = songs.filter(song => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      song.title.toLowerCase().includes(search) ||
+      song.artist.toLowerCase().includes(search) ||
+      (song.album && song.album.toLowerCase().includes(search))
+    );
+  });
+
+  // Filter albums based on search
+  const filteredAlbums = albums.filter(album => {
+    if (!searchTerm) return true;
+    return album.name.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
+  // Drag handlers for albums
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (!reorderMode) return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (!reorderMode || draggedIndex === null) return;
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (!reorderMode || draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newAlbums = [...albums];
+    const [removed] = newAlbums.splice(draggedIndex, 1);
+    newAlbums.splice(dropIndex, 0, removed);
+    setAlbums(newAlbums);
 
     try {
-      // First get the lyrics for this song
-      const lyricsResponse = await fetch(`/api/lyrics?songId=${song._id}`);
-      const lyrics = lyricsResponse.ok ? await lyricsResponse.json() : [];
-
-      // Create the duplicated song
-      const response = await fetch('/api/songs', {
-        method: 'POST',
+      await fetch('/api/user-albums', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: `${song.title} (Copy)`,
-          artist: song.artist,
-          album: song.album,
-          folder: song.folder,
-          tags: song.tags,
-          soundcloud_url: song.soundcloud_url,
-          instrumental_url: song.instrumental_url,
-          completed: false,
-          band_id: song.band_id,
-          album_id: song.album_id,
-          folder_id: song.folder_id,
-        }),
+        body: JSON.stringify({ albumNames: newAlbums.map(a => a.name) }),
       });
-
-      if (response.ok) {
-        const newSong = await response.json();
-
-        // Copy the lyrics if there are any
-        if (lyrics.length > 0) {
-          await fetch('/api/lyrics', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              songId: newSong._id,
-              lines: lyrics.map((line: LyricLine) => ({
-                line_number: line.line_number,
-                text: line.text,
-                timestamp_ms: line.timestamp_ms,
-              })),
-            }),
-          });
-        }
-
-        setSongs([newSong, ...songs]);
-      } else {
-        console.error('Error duplicating song');
-      }
     } catch (error) {
-      console.error('Error duplicating song:', error);
-    }
-  };
-
-  const folders = Array.from(new Set(songs.map(song => song.folder).filter(Boolean))) as string[];
-  const albums = Array.from(new Set(songs.map(song => song.album).filter(Boolean))) as string[];
-  const allTags = Array.from(new Set(songs.flatMap(song => song.tags || []).filter(Boolean))) as string[];
-
-  const filteredSongs = songs
-    .filter(song => {
-      const matchesSearch =
-        song.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        song.artist.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (song.album && song.album.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (song.folder && song.folder.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (song.tags && song.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
-
-      const matchesCompleted =
-        filterByCompleted === 'all' ||
-        (filterByCompleted === 'completed' && song.completed) ||
-        (filterByCompleted === 'incomplete' && !song.completed);
-
-      const matchesFolder =
-        filterByFolder === 'all' ||
-        song.folder === filterByFolder;
-
-      const matchesTag =
-        filterByTag === 'all' ||
-        (song.tags && song.tags.includes(filterByTag));
-
-      const matchesAlbum =
-        filterByAlbum === 'all' ||
-        song.album === filterByAlbum;
-
-      return matchesSearch && matchesCompleted && matchesFolder && matchesTag && matchesAlbum;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'title':
-          return a.title.localeCompare(b.title);
-        case 'artist':
-          return a.artist.localeCompare(b.artist);
-        case 'album':
-          return (a.album || '').localeCompare(b.album || '');
-        case 'updated_at':
-        default:
-          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-      }
-    });
-
-  const handleCreateItem = async () => {
-    if (!newItemName.trim()) return;
-
-    if (showCreateModal === 'song') {
-      onNewSong();
+      console.error('Error saving album order:', error);
+      loadAlbums();
     }
 
-    setShowCreateModal(null);
-    setNewItemName('');
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
-  const hasActiveFilters = filterByCompleted !== 'all' || filterByFolder !== 'all' || filterByTag !== 'all' || filterByAlbum !== 'all';
-
-  const clearFilters = () => {
-    setFilterByCompleted('all');
-    setFilterByFolder('all');
-    setFilterByTag('all');
-    setFilterByAlbum('all');
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
-  return (
-    <>
-      <Script
-        src="https://w.soundcloud.com/player/api.js"
-        strategy="lazyOnload"
-      />
+  if (loading) {
+    return (
+      <div className="w-full h-full flex flex-col justify-center items-center p-4">
+        <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+        <p className="text-base-content/60 text-sm animate-pulse mt-2">Loading library...</p>
+      </div>
+    );
+  }
 
-      {/* Hidden SoundCloud Player */}
-      {playingUrl && (
-        <div className="hidden">
-          <iframe
-            ref={iframeRef}
-            key={playingUrl}
-            width="0"
-            height="0"
-            scrolling="no"
-            frameBorder="no"
-            allow="autoplay"
-            src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(playingUrl)}&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false`}
-          />
-        </div>
-      )}
-
-      {/* Mini Player Bar - shows when playing */}
-      {playingSongId && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 bg-base-100 border border-base-300 shadow-xl rounded-full">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.27-2.154c-.008-.058-.048-.1-.084-.1zm1.09-1.39c-.054 0-.098.044-.105.1l-.21 3.544.21 3.35c.007.057.051.096.105.096.053 0 .096-.039.105-.096l.24-3.35-.24-3.544c-.009-.056-.052-.1-.105-.1zm1.143-.19c-.053 0-.1.044-.107.1l-.212 3.735.212 3.35c.007.055.054.097.107.097.052 0 .098-.042.107-.097l.24-3.35-.24-3.735c-.009-.056-.055-.1-.107-.1zm1.115.427c-.063 0-.107.047-.115.1l-.19 3.407.19 3.35c.008.054.052.097.115.097.062 0 .106-.043.115-.097l.215-3.35-.215-3.407c-.009-.053-.053-.1-.115-.1zm1.18-.48c-.062 0-.11.047-.117.1l-.172 3.888.172 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.194-3.35-.194-3.888c-.009-.053-.056-.1-.117-.1zm1.18-.664c-.062 0-.11.047-.117.1l-.157 4.552.157 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.178-3.35-.178-4.552c-.009-.053-.056-.1-.117-.1zm1.227-.87c-.069 0-.12.052-.127.11l-.136 5.422.136 3.35c.007.058.058.1.127.1.068 0 .118-.042.127-.1l.154-3.35-.154-5.422c-.009-.058-.059-.11-.127-.11zm1.2-.52c-.07 0-.12.052-.127.11l-.12 5.942.12 3.35c.007.058.057.1.127.1.069 0 .12-.042.127-.1l.135-3.35-.135-5.942c-.007-.058-.058-.11-.127-.11zm1.227-.39c-.077 0-.13.057-.137.12l-.103 6.332.103 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.117-3.35-.117-6.332c-.009-.063-.06-.12-.137-.12zm1.227-.18c-.077 0-.13.057-.137.12l-.088 6.512.088 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.1-3.35-.1-6.512c-.009-.063-.06-.12-.137-.12zm4.797-.142c-.246 0-.483.025-.715.069-.147-1.606-1.505-2.87-3.163-2.87-.391 0-.768.072-1.119.204-.126.047-.162.093-.162.185v8.4c0 .097.07.177.166.19l5.008.003c1.38 0 2.5-1.068 2.5-2.387 0-1.32-1.12-2.394-2.5-2.394z"/>
-            </svg>
-            <span className="text-sm font-medium text-base-content max-w-[200px] truncate">
-              {songs.find(s => s._id === playingSongId)?.title || 'Playing...'}
-            </span>
-          </div>
-          <button
-            onClick={() => {
-              if (!scWidget) return;
-              try {
-                if (isPlaying) {
-                  scWidget.pause();
-                } else {
-                  scWidget.play();
-                }
-              } catch (err) {
-                console.error('Error toggling playback:', err);
-              }
-            }}
-            className="p-2 bg-orange-500 hover:bg-orange-600 text-white rounded-full transition-colors"
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-              {isPlaying ? (
-                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-              ) : (
-                <path d="M8 5v14l11-7z"/>
-              )}
-            </svg>
-          </button>
-          <button
-            onClick={stopPlayback}
-            className="p-2 hover:bg-base-200 rounded-full transition-colors"
-            title="Stop"
-          >
-            <svg className="w-4 h-4 text-base-content/60" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 6h12v12H6z"/>
-            </svg>
-          </button>
-        </div>
-      )}
-
+  // Album detail view
+  if (viewMode === 'album-detail' && selectedAlbum) {
+    return (
       <div className="p-4 md:p-6">
-      <div className="space-y-3 mb-">
-        {showFilters && (
-          <div className="flex flex-wrap items-center gap-2 bg-base-900">
-            <select
-              value={filterByCompleted}
-              onChange={e => setFilterByCompleted(e.target.value as any)}
-              className="select select-bordered select-sm flex-1 min-w-[140px]"
-            >
-              <option value="all">All Songs</option>
-              <option value="completed">Completed</option>
-              <option value="incomplete">In Progress</option>
-            </select>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
 
-            <select
-              value={filterByFolder}
-              onChange={e => setFilterByFolder(e.target.value)}
-              className="select select-bordered select-sm flex-1 min-w-[140px]"
-            >
-              <option value="all">All Folders</option>
-              {folders.map(folder => (
-                <option key={folder} value={folder}>{folder}</option>
-              ))}
-            </select>
+        {/* Header */}
+        <div className="flex items-start gap-6 mb-8">
+          <button
+            onClick={handleBackToAlbums}
+            className="btn btn-ghost btn-sm mt-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
 
-            <select
-              value={filterByAlbum}
-              onChange={e => setFilterByAlbum(e.target.value)}
-              className="select select-bordered select-sm flex-1 min-w-[140px]"
-            >
-              <option value="all">All Albums</option>
-              {albums.map(album => (
-                <option key={album} value={album}>{album}</option>
-              ))}
-            </select>
+          {/* Album cover - clickable to change art */}
+          <div
+            className="w-32 h-32 md:w-48 md:h-48 rounded-xl bg-base-200 overflow-hidden cursor-pointer hover:opacity-90 transition-opacity relative group shadow-xl"
+            onClick={() => {
+              setEditingAlbumArt(selectedAlbum.name);
+              fileInputRef.current?.click();
+            }}
+          >
+            {selectedAlbum.cover_art ? (
+              <img src={selectedAlbum.cover_art} alt={selectedAlbum.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500">
+                <svg className="w-16 h-16 text-white/50" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                </svg>
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              {uploadingArt ? (
+                <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <div className="text-center text-white">
+                  <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="text-sm mt-1">Change Cover</span>
+                </div>
+              )}
+            </div>
+          </div>
 
-            <select
-              value={filterByTag}
-              onChange={e => setFilterByTag(e.target.value)}
-              className="select select-bordered select-sm flex-1 min-w-[140px]"
-            >
-              <option value="all">All Tags</option>
-              {allTags.map(tag => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
+          {/* Album info */}
+          <div className="flex-1 pt-2">
+            <p className="text-sm text-base-content/60 uppercase tracking-wider mb-1">Album</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-base-content mb-2">{selectedAlbum.name}</h1>
+            <p className="text-base-content/60">{albumSongs.length} songs</p>
 
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as any)}
-              className="select select-bordered select-sm flex-1 min-w-[140px]"
-            >
-              <option value="updated_at">Sort by Updated</option>
-              <option value="title">Sort by Title</option>
-              <option value="artist">Sort by Artist</option>
-              <option value="album">Sort by Album</option>
-            </select>
+            {/* Action buttons */}
+            <div className="flex gap-2 mt-4">
+              <div className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className="btn btn-outline btn-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  Export
+                </button>
+                {showExportMenu && (
+                  <div className="absolute left-0 mt-2 w-48 bg-base-100 rounded-lg shadow-xl border border-base-300 z-50">
+                    <button onClick={() => handleExport(selectedAlbum.name, 'txt')} className="w-full px-4 py-2 text-left hover:bg-base-200 rounded-t-lg text-sm">
+                      Export as .txt
+                    </button>
+                    <button onClick={() => handleExport(selectedAlbum.name, 'lrc')} className="w-full px-4 py-2 text-left hover:bg-base-200 text-sm">
+                      Export as .lrc (timestamps)
+                    </button>
+                    <button onClick={() => handleExport(selectedAlbum.name, 'json')} className="w-full px-4 py-2 text-left hover:bg-base-200 rounded-b-lg text-sm">
+                      Export as .json
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
-            <button
-              onClick={clearFilters}
-              disabled={!hasActiveFilters}
-              className="btn btn-sm btn-ghost disabled:opacity-50"
-              title="Clear Filters"
-            >
-              Clear
-            </button>
+        {/* Songs grid */}
+        {albumSongs.length === 0 ? (
+          <div className="text-center py-12 text-base-content/60">No songs in this album</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {albumSongs.map((song, index) => (
+              <div
+                key={song._id}
+                onClick={() => handleSelectSong(song)}
+                className="group cursor-pointer"
+              >
+                <div className="aspect-square rounded-lg bg-base-200 overflow-hidden relative mb-2 shadow-md group-hover:shadow-xl transition-all group-hover:scale-[1.02]">
+                  {getSongArtwork(song) ? (
+                    <img src={getSongArtwork(song)!} alt={song.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-200 to-base-300">
+                      <span className="text-4xl font-bold text-base-content/20">{index + 1}</span>
+                    </div>
+                  )}
+                  {song.completed && (
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-success rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-success-content" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  )}
+                  {/* Delete button - shows on hover */}
+                  <button
+                    onClick={(e) => handleDeleteSong(e, song)}
+                    className="absolute top-2 left-2 w-7 h-7 bg-red-500/90 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                    title="Delete song"
+                  >
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+                <h3 className="font-medium text-base-content text-sm truncate">{song.title}</h3>
+                <p className="text-xs text-base-content/60 truncate">{song.artist}</p>
+              </div>
+            ))}
           </div>
         )}
+      </div>
+    );
+  }
 
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`btn btn-ghost btn-square ${showFilters || hasActiveFilters ? 'text-primary' : 'text-base-content/50'}`}
-            title="Toggle Filters"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />
-            </svg>
-          </button>
+  // Main library view
+  return (
+    <div className="p-4 md:p-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 mb-6">
+        {/* Title and controls */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl md:text-3xl font-bold text-base-content">Library</h1>
+          <div className="flex items-center gap-2">
+            {viewMode === 'albums' && (
+              <button
+                onClick={() => setReorderMode(!reorderMode)}
+                className={`btn btn-ghost btn-sm ${reorderMode ? 'text-primary' : ''}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                </svg>
+                {reorderMode ? 'Done' : 'Reorder'}
+              </button>
+            )}
+            <button onClick={onNewSong} className="btn btn-primary btn-sm">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              New Song
+            </button>
+          </div>
+        </div>
 
-          <button
-            onClick={() => setReorderMode(!reorderMode)}
-            className={`btn btn-ghost btn-square ${reorderMode ? 'text-primary' : 'text-base-content/50'}`}
-            title="Reorder Mode"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-            </svg>
-          </button>
-
-          <div className="relative flex-1">
+        {/* Search and view toggle */}
+        <div className="flex items-center gap-4">
+          <div className="relative flex-1 max-w-md">
             <input
               type="text"
-              placeholder="Search songs, artists, albums, folders, tags..."
+              placeholder="Search songs, artists, albums..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="input input-bordered w-full pl-11"
+              className="input input-bordered w-full pl-10"
             />
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-7 h-7 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8" />
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
             </svg>
           </div>
 
-          <button
-            onClick={onNewSong}
-            className="btn btn-ghost btn-square text-primary"
-            title="Add Song"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-            </svg>
-          </button>
-
-          <button
-            onClick={() => setShowCreateModal('album')}
-            className="btn btn-ghost btn-square text-info"
-            title="Add Album"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-            </svg>
-          </button>
-
-          <button
-            onClick={() => setShowCreateModal('folder')}
-            className="btn btn-ghost btn-square text-warning"
-            title="Add Folder"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 10.5v6m3-3H9m4.06-7.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
-            </svg>
-          </button>
-
-          <button
-            onClick={() => setShowCreateModal('tag')}
-            className="btn btn-ghost btn-square text-success"
-            title="Add Tag"
-          >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="w-full h-full flex flex-col justify-center items-center">
-          <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
-          <p className="text-base-content/60 text-sm md:text-base animate-pulse">Loading songs...</p>
-        </div>
-      ) : filteredSongs.length === 0 ? (
-        <div className="p-4 gap-4 flex flex-col justify-between h-full w-full card card-bordered border-secondary opacity-70 hover:opacity-100 transition-opacity duration-300">
-          <svg className="w-20 h-20 mx-auto mb-4 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-          </svg>
-          <p className="text-base-content/60 text-sm md:text-base">
-            {searchTerm ? 'No songs found' : 'No songs yet. Create your first song!'}
-          </p>
-        </div>
-      ) : (
-        <div className="w-full h-full flex flex-col justify-center items-center p-4">
-          {filteredSongs.map(song => (
-            <div
-              key={song._id}
-              onClick={() => handleSelectSong(song)}
-              onMouseEnter={() => setHoveredSong(song._id)}
-              onMouseLeave={() => setHoveredSong(null)}
-              className="p-4 gap-4 flex flex-col justify-between h-full w-full card card-bordered border-secondary opacity-70 hover:opacity-100 transition-opacity duration-300"
+          <div className="tabs tabs-boxed">
+            <button
+              onClick={() => { setViewMode('all'); setReorderMode(false); }}
+              className={`tab ${viewMode === 'all' ? 'tab-active' : ''}`}
             >
-              <div className="cursor-pointer">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <svg className="w-7 h-7 text-primary shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                    </svg>
-                    <h3 className="text-base md:text-xl font-bold text-base-content truncate flex-1">
-                      {song.title}
-                    </h3>
-                    {song.completed && (
-                      <span className="badge badge-success badge-sm">
-                        ✓ Complete
-                      </span>
-                    )}
-                    <div className="flex items-center gap-1">
-                      {reorderMode ? (
-                        <button
-                          className="btn btn-ghost btn-xs cursor-move"
-                          title="Drag to Reorder"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-                          </svg>
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              handleSelectSong(song);
-                            }}
-                            className="btn btn-ghost btn-xs text-info"
-                            title="Edit"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              handleLyricSync(song);
-                            }}
-                            className="btn btn-ghost btn-xs text-secondary"
-                            title="Lyric Sync"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              onViewMetrics?.(song);
-                            }}
-                            className="btn btn-ghost btn-xs text-success"
-                            title="View Metrics"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={e => handleToggleCompleted(song, e)}
-                            className={`btn btn-ghost btn-xs ${song.completed ? 'text-warning' : 'text-success'}`}
-                            title={song.completed ? 'Mark Incomplete' : 'Mark Complete'}
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              {song.completed ? (
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                              ) : (
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              )}
-                            </svg>
-                          </button>
-                          <button
-                            onClick={e => handleDuplicateSong(song, e)}
-                            className="btn btn-ghost btn-xs text-primary"
-                            title="Duplicate Song"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={e => handleDeleteSong(song._id, e)}
-                            className="btn btn-ghost btn-xs text-error"
-                            title="Delete"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 mb-2 bg-base-900">
-                    <svg className="w-5 h-5 text-base-content/50 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                    </svg>
-                    <p className="text-sm md:text-base text-base-content truncate flex-1">{song.artist}</p>
-                    <div className="flex items-center gap-2 text-xs text-base-content/70 flex-wrap">
-                      {song.album && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 border border-blue-200 whitespace-nowrap" style={{borderRadius: '4px'}}>
-                          {song.album}
-                        </span>
-                      )}
-                      {song.folder && (
-                        <span className="px-2 py-1 bg-orange-100 text-orange-700 border border-orange-200 whitespace-nowrap" style={{borderRadius: '4px'}}>
-                          📁 {song.folder}
-                        </span>
-                      )}
-                      {song.tags && song.tags.length > 0 && (
-                        <div className="flex gap-1 flex-wrap">
-                          {song.tags.map(tag => (
-                            <span key={tag} className="tag tag-outline tag-lg tag-primary">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs md:text-sm text-base-content/60 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Updated: {new Date(song.updated_at).toLocaleDateString()}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* SoundCloud Reference indicator */}
-                      <div
-                        className={`flex items-center gap-1 px-2 py-1 rounded-md ${
-                          song.soundcloud_url
-                            ? 'bg-orange-100 text-orange-700 border border-orange-200'
-                            : 'bg-base-200 text-base-content/40 border border-base-300'
-                        }`}
-                        title={song.soundcloud_url ? 'Reference track linked' : 'No reference track'}
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.27-2.154c-.008-.058-.048-.1-.084-.1zm1.09-1.39c-.054 0-.098.044-.105.1l-.21 3.544.21 3.35c.007.057.051.096.105.096.053 0 .096-.039.105-.096l.24-3.35-.24-3.544c-.009-.056-.052-.1-.105-.1zm1.143-.19c-.053 0-.1.044-.107.1l-.212 3.735.212 3.35c.007.055.054.097.107.097.052 0 .098-.042.107-.097l.24-3.35-.24-3.735c-.009-.056-.055-.1-.107-.1zm1.115.427c-.063 0-.107.047-.115.1l-.19 3.407.19 3.35c.008.054.052.097.115.097.062 0 .106-.043.115-.097l.215-3.35-.215-3.407c-.009-.053-.053-.1-.115-.1zm1.18-.48c-.062 0-.11.047-.117.1l-.172 3.888.172 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.194-3.35-.194-3.888c-.009-.053-.056-.1-.117-.1zm1.18-.664c-.062 0-.11.047-.117.1l-.157 4.552.157 3.35c.007.053.055.097.117.097.061 0 .108-.044.117-.097l.178-3.35-.178-4.552c-.009-.053-.056-.1-.117-.1zm1.227-.87c-.069 0-.12.052-.127.11l-.136 5.422.136 3.35c.007.058.058.1.127.1.068 0 .118-.042.127-.1l.154-3.35-.154-5.422c-.009-.058-.059-.11-.127-.11zm1.2-.52c-.07 0-.12.052-.127.11l-.12 5.942.12 3.35c.007.058.057.1.127.1.069 0 .12-.042.127-.1l.135-3.35-.135-5.942c-.007-.058-.058-.11-.127-.11zm1.227-.39c-.077 0-.13.057-.137.12l-.103 6.332.103 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.117-3.35-.117-6.332c-.009-.063-.06-.12-.137-.12zm1.227-.18c-.077 0-.13.057-.137.12l-.088 6.512.088 3.35c.007.063.06.108.137.108s.128-.045.137-.108l.1-3.35-.1-6.512c-.009-.063-.06-.12-.137-.12zm4.797-.142c-.246 0-.483.025-.715.069-.147-1.606-1.505-2.87-3.163-2.87-.391 0-.768.072-1.119.204-.126.047-.162.093-.162.185v8.4c0 .097.07.177.166.19l5.008.003c1.38 0 2.5-1.068 2.5-2.387 0-1.32-1.12-2.394-2.5-2.394z"/>
-                        </svg>
-                        <span className="text-xs font-medium">Ref</span>
-                        {song.soundcloud_url && (
-                          <button
-                            onClick={(e) => handlePlayReference(song, e)}
-                            className={`p-0.5 rounded transition-colors ${
-                              playingSongId === song._id && isPlaying
-                                ? 'bg-orange-300 text-orange-900'
-                                : 'hover:bg-orange-200'
-                            }`}
-                            title={playingSongId === song._id && isPlaying ? 'Pause' : 'Play reference'}
-                          >
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                              {playingSongId === song._id && isPlaying ? (
-                                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-                              ) : (
-                                <path d="M8 5v14l11-7z"/>
-                              )}
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                      {/* Instrumental indicator */}
-                      <div
-                        className={`flex items-center gap-1 px-2 py-1 rounded-md ${
-                          song.instrumental_url
-                            ? 'bg-purple-100 text-purple-700 border border-purple-200'
-                            : 'bg-base-200 text-base-content/40 border border-base-300'
-                        }`}
-                        title={song.instrumental_url ? 'Instrumental track linked' : 'No instrumental track'}
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                        </svg>
-                        <span className="text-xs font-medium">Inst</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+              All Songs
+            </button>
+            <button
+              onClick={() => { setViewMode('albums'); setReorderMode(false); }}
+              className={`tab ${viewMode === 'albums' ? 'tab-active' : ''}`}
+            >
+              Albums
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* All Songs Grid */}
+      {viewMode === 'all' && (
+        <>
+          {filteredSongs.length === 0 ? (
+            <div className="text-center py-16">
+              <svg className="w-20 h-20 mx-auto mb-4 text-base-content/20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+              </svg>
+              <p className="text-base-content/60 text-lg">{searchTerm ? 'No songs found' : 'No songs yet'}</p>
+              {!searchTerm && (
+                <button onClick={onNewSong} className="btn btn-primary mt-4">
+                  Create your first song
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {filteredSongs.map(song => (
+                <div
+                  key={song._id}
+                  onClick={() => handleSelectSong(song)}
+                  className="group cursor-pointer"
+                >
+                  <div className="aspect-square rounded-lg bg-base-200 overflow-hidden relative mb-2 shadow-md group-hover:shadow-xl transition-all group-hover:scale-[1.02]">
+                    {getSongArtwork(song) ? (
+                      <img src={getSongArtwork(song)!} alt={song.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500/20 to-pink-500/20">
+                        <svg className="w-1/3 h-1/3 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                        </svg>
+                      </div>
+                    )}
+                    {song.completed && (
+                      <div className="absolute top-2 right-2 w-6 h-6 bg-success rounded-full flex items-center justify-center">
+                        <svg className="w-4 h-4 text-success-content" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    )}
+                    {/* Delete button - shows on hover */}
+                    <button
+                      onClick={(e) => handleDeleteSong(e, song)}
+                      className="absolute top-2 left-2 w-7 h-7 bg-red-500/90 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                      title="Delete song"
+                    >
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                  <h3 className="font-medium text-base-content text-sm truncate">{song.title}</h3>
+                  <p className="text-xs text-base-content/60 truncate">{song.artist}</p>
+                  {song.album && (
+                    <p className="text-xs text-base-content/40 truncate">{song.album}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {/* Create Modal */}
-      {showCreateModal && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">
-              Add New {showCreateModal.charAt(0).toUpperCase() + showCreateModal.slice(1)}
-            </h3>
-            <div className="py-4">
-              <input
-                type="text"
-                placeholder={`Enter ${showCreateModal} name...`}
-                value={newItemName}
-                onChange={e => setNewItemName(e.target.value)}
-                className="input input-bordered w-full"
-                onKeyDown={e => e.key === 'Enter' && handleCreateItem()}
-                autoFocus
-              />
+      {/* Albums Grid */}
+      {viewMode === 'albums' && (
+        <>
+          {filteredAlbums.length === 0 ? (
+            <div className="text-center py-16">
+              <svg className="w-20 h-20 mx-auto mb-4 text-base-content/20" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+              </svg>
+              <p className="text-base-content/60 text-lg">{searchTerm ? 'No albums found' : 'No albums yet'}</p>
+              <p className="text-base-content/40 text-sm mt-2">Add songs to albums to see them here</p>
             </div>
-            <div className="modal-action">
-              <button
-                onClick={() => setShowCreateModal(null)}
-                className="btn btn-ghost"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateItem}
-                className="btn btn-primary"
-              >
-                Create
-              </button>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {filteredAlbums.map((album, index) => (
+                <div
+                  key={album._id}
+                  draggable={reorderMode}
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onClick={() => handleAlbumClick(album)}
+                  className={`group cursor-pointer transition-all ${
+                    reorderMode ? 'cursor-grab active:cursor-grabbing' : ''
+                  } ${draggedIndex === index ? 'opacity-50' : ''} ${
+                    dragOverIndex === index ? 'scale-105 ring-2 ring-primary rounded-lg' : ''
+                  }`}
+                >
+                  <div className="aspect-square rounded-lg bg-base-200 overflow-hidden relative mb-2 shadow-md group-hover:shadow-xl transition-all group-hover:scale-[1.02]">
+                    {album.cover_art ? (
+                      <img src={album.cover_art} alt={album.name} className="w-full h-full object-cover" draggable={false} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-pink-500">
+                        <svg className="w-1/3 h-1/3 text-white/50" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                        </svg>
+                      </div>
+                    )}
+                    {reorderMode && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <h3 className="font-medium text-base-content text-sm truncate">{album.name}</h3>
+                  <p className="text-xs text-base-content/60">{album.song_count} songs</p>
+                </div>
+              ))}
             </div>
-          </div>
-          <div className="modal-backdrop" onClick={() => setShowCreateModal(null)}>
-          </div>
-        </div>
+          )}
+        </>
       )}
-      </div>
-    </>
+    </div>
   );
 }

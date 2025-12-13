@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import SongLibrary from '@/components/SongLibrary';
 import LyricEditor from '@/components/LyricEditor';
@@ -8,6 +8,7 @@ import SimpleTeleprompter from '@/components/SimpleTeleprompter';
 import Teleprompter from '@/components/Teleprompter';
 import SongMetrics from '@/components/SongMetrics';
 import Settings from '@/components/Settings';
+import Social from '@/components/Social';
 
 type Song = {
   _id: string;
@@ -37,13 +38,39 @@ type LyricLine = {
   updated_at: string;
 };
 
+type TabType = 'library' | 'editor' | 'teleprompter' | 'metrics' | 'social' | 'settings';
+
 export default function Home() {
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [lyrics, setLyrics] = useState<LyricLine[]>([]);
-  const [activeTab, setActiveTab] = useState<'library' | 'editor' | 'teleprompter' | 'metrics' | 'settings'>('library');
-  const [previousTab, setPreviousTab] = useState<'library' | 'editor' | 'teleprompter' | 'metrics' | 'settings'>('library');
+  const [activeTab, setActiveTab] = useState<TabType>('library');
+  const [previousTab, setPreviousTab] = useState<TabType>('library');
+  const [pendingSocialCount, setPendingSocialCount] = useState(0);
 
-  const handleTabChange = (tab: 'library' | 'editor' | 'teleprompter' | 'metrics' | 'settings') => {
+  // Fetch pending social count (friend requests + band invites)
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      try {
+        const [requestsRes, invitesRes] = await Promise.all([
+          fetch('/api/friend-requests?type=incoming'),
+          fetch('/api/band-invites'),
+        ]);
+        if (requestsRes.ok && invitesRes.ok) {
+          const requests = await requestsRes.json();
+          const invites = await invitesRes.json();
+          setPendingSocialCount(requests.length + invites.length);
+        }
+      } catch (err) {
+        console.error('Failed to fetch pending social count:', err);
+      }
+    };
+    fetchPendingCount();
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchPendingCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleTabChange = (tab: TabType) => {
     setPreviousTab(activeTab);
     setActiveTab(tab);
   };
@@ -79,12 +106,20 @@ export default function Home() {
     setActiveTab('teleprompter');
   };
 
+  // For teleprompter direct song selection - stays on teleprompter
+  const handleTeleprompterSelectSong = (song: Song, songLyrics: LyricLine[]) => {
+    setCurrentSong(song);
+    setLyrics(songLyrics);
+    // Stay on teleprompter tab, don't change previousTab
+  };
+
   return (
     <main>
       <Header
         activeTab={activeTab}
-        onTabChange={handleTabChange} 
+        onTabChange={handleTabChange}
         lyricsCount={lyrics.length}
+        pendingSocialCount={pendingSocialCount}
       />
 
       <div className="mx-auto px-2 md:px-4 pt-24 pb-8">
@@ -111,6 +146,8 @@ export default function Home() {
             <Teleprompter
               song={currentSong}
               lyrics={lyrics}
+              onLyricsChange={setLyrics}
+              onSelectSong={handleTeleprompterSelectSong}
             />
           )}
            {activeTab === 'metrics' && (
@@ -122,6 +159,12 @@ export default function Home() {
                onSelectSong={handleSelectSong}
              />
            )}
+          {activeTab === 'social' && (
+            <Social
+              onBack={handleBack}
+              showBackButton={previousTab !== 'social'}
+            />
+          )}
           {activeTab === 'settings' && (
             <Settings
               onBack={handleBack}

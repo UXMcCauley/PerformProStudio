@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import SongImportModal from './SongImportModal';
+import BandSettingsPanel from './BandSettingsPanel';
 
 type Band = {
   _id: string;
   user_id: string;
   name: string;
+  role?: 'owner' | 'admin' | 'member';
   created_at: string;
   updated_at: string;
 };
@@ -42,6 +44,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
   const [newBand, setNewBand] = useState('');
   const [hasPersonalChanges, setHasPersonalChanges] = useState(false);
   const [originalPersonalData, setOriginalPersonalData] = useState({ name: 'User Name', email: 'user@example.com', avatar: null as string | null });
+  const [selectedBand, setSelectedBand] = useState<Band | null>(null);
 
   useEffect(() => {
     const hasChanges = name !== originalPersonalData.name || email !== originalPersonalData.email || avatar !== originalPersonalData.avatar;
@@ -429,7 +432,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
               <div>
                 <h3 className="text-lg font-semibold text-base-content mb-4">Your Bands</h3>
                 <p className="text-sm text-base-content/60 mb-4">
-                  Manage your bands to organize your song library
+                  Manage your bands and collaborate with other musicians
                 </p>
 
                 <div className="space-y-3 mb-6">
@@ -441,22 +444,49 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                     bands.map(band => (
                       <div
                         key={band._id}
-                        className="flex items-center justify-between p-3 bg-base-200 border border-base-300 transition-colors"
+                        className="flex items-center justify-between p-3 bg-base-200 border border-base-300 rounded-lg transition-colors hover:bg-base-300/50"
                       >
                         <div className="flex items-center gap-3">
-                          <svg className="w-7 h-7 text-purple-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                          </svg>
-                          <span className="font-medium text-base-content">{band.name}</span>
+                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <span className="font-medium text-base-content">{band.name}</span>
+                            {band.role && (
+                              <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                                band.role === 'owner' ? 'bg-amber-500 text-white' :
+                                band.role === 'admin' ? 'bg-purple-500 text-white' :
+                                'bg-base-300 text-base-content'
+                              }`}>
+                                {band.role}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <button
-                          onClick={() => handleRemoveBand(band._id)}
-                          className="p-1 text-base-content/50 hover:text-red-600 transition-colors"
-                        >
-                          <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setSelectedBand(band)}
+                            className="btn btn-ghost btn-sm"
+                            title="Band settings"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                            </svg>
+                          </button>
+                          {band.role === 'owner' && (
+                            <button
+                              onClick={() => handleRemoveBand(band._id)}
+                              className="btn btn-ghost btn-sm text-error"
+                              title="Delete band"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}
@@ -468,15 +498,15 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                     value={newBand}
                     onChange={e => setNewBand(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAddBand()}
-                    placeholder="Add new band..."
-                    className="flex-1 px-4 py-2 border border-slate-300 focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                    placeholder="Create new band..."
+                    className="flex-1 px-4 py-2 border border-base-300 rounded-lg focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   />
                   <button
                     onClick={handleAddBand}
                     disabled={!newBand.trim()}
                     className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Add Band
+                    Create Band
                   </button>
                 </div>
               </div>
@@ -709,6 +739,18 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
 
       {/* Song Import Modal */}
       <SongImportModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />
+
+      {/* Band Settings Panel */}
+      {selectedBand && (
+        <BandSettingsPanel
+          band={selectedBand}
+          onClose={() => setSelectedBand(null)}
+          onBandDeleted={() => {
+            setBands(bands.filter(b => b._id !== selectedBand._id));
+            setSelectedBand(null);
+          }}
+        />
+      )}
     </div>
   );
 }

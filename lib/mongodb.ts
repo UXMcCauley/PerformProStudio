@@ -43,6 +43,8 @@ export type Album = {
   _id: string;
   band_id: string;
   name: string;
+  cover_art: string | null;
+  display_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -51,6 +53,7 @@ export type Folder = {
   _id: string;
   band_id: string;
   name: string;
+  display_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -73,11 +76,13 @@ export type Song = {
   tags: string[];
   soundcloud_url: string | null;
   instrumental_url: string | null;
+  artwork_url: string | null;
   completed: boolean;
   band_id: string | null;
   album_id: string | null;
   folder_id: string | null;
   user_id: string;
+  display_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -259,9 +264,20 @@ export async function createAlbum(bandId: string, name: string): Promise<Album |
   try {
     const db = await getDb();
     const now = new Date().toISOString();
+
+    // Get the max display_order for this band's albums
+    const maxOrderDoc = await db.collection('albums')
+      .find({ band_id: bandId })
+      .sort({ display_order: -1 })
+      .limit(1)
+      .toArray();
+    const maxOrder = maxOrderDoc.length > 0 ? (maxOrderDoc[0].display_order || 0) : 0;
+
     const doc = {
       band_id: bandId,
       name,
+      cover_art: null,
+      display_order: maxOrder + 1,
       created_at: now,
       updated_at: now,
     };
@@ -270,6 +286,45 @@ export async function createAlbum(bandId: string, name: string): Promise<Album |
   } catch (error) {
     console.error('Error creating album:', error);
     return null;
+  }
+}
+
+export async function updateAlbum(albumId: string, updates: Partial<Album>): Promise<Album | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const result = await db.collection('albums').findOneAndUpdate(
+      { _id: new ObjectId(albumId) },
+      { $set: { ...updates, updated_at: now } },
+      { returnDocument: 'after' }
+    );
+
+    if (!result) return null;
+    return toClientDoc(result) as Album;
+  } catch (error) {
+    console.error('Error updating album:', error);
+    return null;
+  }
+}
+
+export async function reorderAlbums(albumIds: string[]): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const bulkOps = albumIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: new ObjectId(id) },
+        update: { $set: { display_order: index, updated_at: now } }
+      }
+    }));
+
+    await db.collection('albums').bulkWrite(bulkOps);
+    return true;
+  } catch (error) {
+    console.error('Error reordering albums:', error);
+    return false;
   }
 }
 
@@ -303,9 +358,19 @@ export async function createFolder(bandId: string, name: string): Promise<Folder
   try {
     const db = await getDb();
     const now = new Date().toISOString();
+
+    // Get the max display_order for this band's folders
+    const maxOrderDoc = await db.collection('folders')
+      .find({ band_id: bandId })
+      .sort({ display_order: -1 })
+      .limit(1)
+      .toArray();
+    const maxOrder = maxOrderDoc.length > 0 ? (maxOrderDoc[0].display_order || 0) : 0;
+
     const doc = {
       band_id: bandId,
       name,
+      display_order: maxOrder + 1,
       created_at: now,
       updated_at: now,
     };
@@ -314,6 +379,45 @@ export async function createFolder(bandId: string, name: string): Promise<Folder
   } catch (error) {
     console.error('Error creating folder:', error);
     return null;
+  }
+}
+
+export async function updateFolder(folderId: string, updates: Partial<Folder>): Promise<Folder | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const result = await db.collection('folders').findOneAndUpdate(
+      { _id: new ObjectId(folderId) },
+      { $set: { ...updates, updated_at: now } },
+      { returnDocument: 'after' }
+    );
+
+    if (!result) return null;
+    return toClientDoc(result) as Folder;
+  } catch (error) {
+    console.error('Error updating folder:', error);
+    return null;
+  }
+}
+
+export async function reorderFolders(folderIds: string[]): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const bulkOps = folderIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: new ObjectId(id) },
+        update: { $set: { display_order: index, updated_at: now } }
+      }
+    }));
+
+    await db.collection('folders').bulkWrite(bulkOps);
+    return true;
+  } catch (error) {
+    console.error('Error reordering folders:', error);
+    return false;
   }
 }
 
@@ -386,12 +490,22 @@ export async function getUserSongs(userId: string): Promise<Song[]> {
   }
 }
 
-export async function createSong(song: Omit<Song, '_id' | 'created_at' | 'updated_at'>): Promise<Song | null> {
+export async function createSong(song: Omit<Song, '_id' | 'created_at' | 'updated_at' | 'display_order'>): Promise<Song | null> {
   try {
     const db = await getDb();
     const now = new Date().toISOString();
+
+    // Get the max display_order for this user's songs
+    const maxOrderDoc = await db.collection('songs')
+      .find({ user_id: song.user_id })
+      .sort({ display_order: -1 })
+      .limit(1)
+      .toArray();
+    const maxOrder = maxOrderDoc.length > 0 ? (maxOrderDoc[0].display_order || 0) : 0;
+
     const doc = {
       ...song,
+      display_order: maxOrder + 1,
       created_at: now,
       updated_at: now,
     };
@@ -419,6 +533,348 @@ export async function updateSong(songId: string, updates: Partial<Song>): Promis
   } catch (error) {
     console.error('Error updating song:', error);
     return null;
+  }
+}
+
+export async function reorderSongs(songIds: string[]): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const bulkOps = songIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: new ObjectId(id) },
+        update: { $set: { display_order: index, updated_at: now } }
+      }
+    }));
+
+    await db.collection('songs').bulkWrite(bulkOps);
+    return true;
+  } catch (error) {
+    console.error('Error reordering songs:', error);
+    return false;
+  }
+}
+
+export async function getAlbumSongs(albumName: string, userId: string): Promise<Song[]> {
+  try {
+    const db = await getDb();
+    const docs = await db.collection('songs')
+      .find({ user_id: userId, album: albumName })
+      .sort({ display_order: 1 })
+      .toArray();
+    return docs.map(doc => toClientDoc(doc)) as Song[];
+  } catch (error) {
+    console.error('Error fetching album songs:', error);
+    return [];
+  }
+}
+
+// Get unique album names with cover art from user's albums collection or songs
+export type UserAlbum = {
+  _id: string;
+  name: string;
+  cover_art: string | null;
+  display_order: number;
+  song_count: number;
+  user_id: string;
+};
+
+export async function getUserAlbums(userId: string): Promise<UserAlbum[]> {
+  try {
+    const db = await getDb();
+
+    // First try to get albums from the user_albums collection
+    const userAlbums = await db.collection('user_albums')
+      .find({ user_id: userId })
+      .sort({ display_order: 1 })
+      .toArray();
+
+    // Get song counts for each album
+    const albumCounts = await db.collection('songs').aggregate([
+      { $match: { user_id: userId, album: { $ne: null } } },
+      { $group: { _id: '$album', count: { $sum: 1 } } }
+    ]).toArray();
+
+    const countMap = new Map(albumCounts.map(a => [a._id, a.count]));
+
+    if (userAlbums.length > 0) {
+      return userAlbums.map(album => ({
+        ...toClientDoc(album),
+        song_count: countMap.get(album.name) || 0,
+      })) as UserAlbum[];
+    }
+
+    // Fallback: get unique albums from songs
+    const uniqueAlbums = await db.collection('songs').aggregate([
+      { $match: { user_id: userId, album: { $ne: null } } },
+      { $group: { _id: '$album' } },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+
+    return uniqueAlbums.map((album, index) => ({
+      _id: album._id,
+      name: album._id,
+      cover_art: null,
+      display_order: index,
+      song_count: countMap.get(album._id) || 0,
+      user_id: userId,
+    }));
+  } catch (error) {
+    console.error('Error fetching user albums:', error);
+    return [];
+  }
+}
+
+export async function createUserAlbum(userId: string, name: string, coverArt?: string): Promise<UserAlbum | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    // Check if album already exists
+    const existing = await db.collection('user_albums').findOne({
+      user_id: userId,
+      name: name
+    });
+
+    if (existing) {
+      return null; // Album already exists
+    }
+
+    // Get max display order
+    const maxOrderDoc = await db.collection('user_albums')
+      .find({ user_id: userId })
+      .sort({ display_order: -1 })
+      .limit(1)
+      .toArray();
+    const maxOrder = maxOrderDoc.length > 0 ? (maxOrderDoc[0].display_order || 0) : 0;
+
+    const doc = {
+      user_id: userId,
+      name,
+      cover_art: coverArt || null,
+      display_order: maxOrder + 1,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const result = await db.collection('user_albums').insertOne(doc);
+    return {
+      _id: result.insertedId.toString(),
+      name,
+      cover_art: coverArt || null,
+      display_order: maxOrder + 1,
+      song_count: 0,
+      user_id: userId,
+    };
+  } catch (error) {
+    console.error('Error creating user album:', error);
+    return null;
+  }
+}
+
+export async function updateUserAlbum(userId: string, albumName: string, updates: { cover_art?: string | null; name?: string }): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    // Try to update in user_albums collection first
+    const result = await db.collection('user_albums').findOneAndUpdate(
+      { user_id: userId, name: albumName },
+      {
+        $set: { ...updates, updated_at: now },
+        $setOnInsert: {
+          user_id: userId,
+          name: albumName,
+          display_order: 0,
+          created_at: now,
+        }
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+
+    // If renaming the album, update all songs with that album
+    if (updates.name && updates.name !== albumName) {
+      await db.collection('songs').updateMany(
+        { user_id: userId, album: albumName },
+        { $set: { album: updates.name, updated_at: now } }
+      );
+    }
+
+    return !!result;
+  } catch (error) {
+    console.error('Error updating user album:', error);
+    return false;
+  }
+}
+
+export async function deleteUserAlbum(userId: string, albumName: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+
+    // Delete from user_albums collection
+    await db.collection('user_albums').deleteOne({
+      user_id: userId,
+      name: albumName
+    });
+
+    // Remove album from all songs (don't delete the songs)
+    await db.collection('songs').updateMany(
+      { user_id: userId, album: albumName },
+      { $set: { album: null, updated_at: new Date().toISOString() } }
+    );
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting user album:', error);
+    return false;
+  }
+}
+
+export async function reorderUserAlbums(userId: string, albumNames: string[]): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const bulkOps = albumNames.map((name, index) => ({
+      updateOne: {
+        filter: { user_id: userId, name },
+        update: {
+          $set: { display_order: index, updated_at: now },
+          $setOnInsert: { user_id: userId, name, cover_art: null, created_at: now }
+        },
+        upsert: true
+      }
+    }));
+
+    await db.collection('user_albums').bulkWrite(bulkOps);
+    return true;
+  } catch (error) {
+    console.error('Error reordering user albums:', error);
+    return false;
+  }
+}
+
+// Similar functions for user folders
+export type UserFolder = {
+  _id: string;
+  name: string;
+  display_order: number;
+  song_count: number;
+  user_id: string;
+};
+
+export async function getUserFolders(userId: string): Promise<UserFolder[]> {
+  try {
+    const db = await getDb();
+
+    // Get folders from user_folders collection
+    const userFolders = await db.collection('user_folders')
+      .find({ user_id: userId })
+      .sort({ display_order: 1 })
+      .toArray();
+
+    // Get song counts for each folder
+    const folderCounts = await db.collection('songs').aggregate([
+      { $match: { user_id: userId, folder: { $ne: null } } },
+      { $group: { _id: '$folder', count: { $sum: 1 } } }
+    ]).toArray();
+
+    const countMap = new Map(folderCounts.map(f => [f._id, f.count]));
+
+    if (userFolders.length > 0) {
+      return userFolders.map(folder => ({
+        ...toClientDoc(folder),
+        song_count: countMap.get(folder.name) || 0,
+      })) as UserFolder[];
+    }
+
+    // Fallback: get unique folders from songs
+    const uniqueFolders = await db.collection('songs').aggregate([
+      { $match: { user_id: userId, folder: { $ne: null } } },
+      { $group: { _id: '$folder' } },
+      { $sort: { _id: 1 } }
+    ]).toArray();
+
+    return uniqueFolders.map((folder, index) => ({
+      _id: folder._id,
+      name: folder._id,
+      display_order: index,
+      song_count: countMap.get(folder._id) || 0,
+      user_id: userId,
+    }));
+  } catch (error) {
+    console.error('Error fetching user folders:', error);
+    return [];
+  }
+}
+
+export async function createUserFolder(userId: string, name: string): Promise<UserFolder | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    // Check if folder already exists
+    const existing = await db.collection('user_folders').findOne({
+      user_id: userId,
+      name: name
+    });
+
+    if (existing) {
+      return null;
+    }
+
+    // Get max display order
+    const maxOrderDoc = await db.collection('user_folders')
+      .find({ user_id: userId })
+      .sort({ display_order: -1 })
+      .limit(1)
+      .toArray();
+    const maxOrder = maxOrderDoc.length > 0 ? (maxOrderDoc[0].display_order || 0) : 0;
+
+    const doc = {
+      user_id: userId,
+      name,
+      display_order: maxOrder + 1,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const result = await db.collection('user_folders').insertOne(doc);
+    return {
+      _id: result.insertedId.toString(),
+      name,
+      display_order: maxOrder + 1,
+      song_count: 0,
+      user_id: userId,
+    };
+  } catch (error) {
+    console.error('Error creating user folder:', error);
+    return null;
+  }
+}
+
+export async function reorderUserFolders(userId: string, folderNames: string[]): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const bulkOps = folderNames.map((name, index) => ({
+      updateOne: {
+        filter: { user_id: userId, name },
+        update: {
+          $set: { display_order: index, updated_at: now },
+          $setOnInsert: { user_id: userId, name, created_at: now }
+        },
+        upsert: true
+      }
+    }));
+
+    await db.collection('user_folders').bulkWrite(bulkOps);
+    return true;
+  } catch (error) {
+    console.error('Error reordering user folders:', error);
+    return false;
   }
 }
 

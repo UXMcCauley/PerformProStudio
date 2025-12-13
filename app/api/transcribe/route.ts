@@ -4,14 +4,17 @@ import { authOptions } from '@/lib/auth';
 import {
   transcribeFromUrl,
   formatTranscriptAsLyrics,
+  formatTranscriptAsTimedLines,
   estimateTempo,
   TranscriptionResult,
+  TimedLine,
 } from '@/lib/deepgram';
 import { processLyricsForPerformance } from '@/lib/lyrics-ai';
 
 export interface TranscribeResponse {
   transcript: string;
   formattedLyrics: string;
+  timedLines: TimedLine[];
   processedLyrics?: {
     lines: Array<{
       text: string;
@@ -73,8 +76,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 2: Format as basic lyrics
+    // Step 2: Format as basic lyrics and timed lines
     const formattedLyrics = formatTranscriptAsLyrics(transcription);
+    const timedLines = formatTranscriptAsTimedLines(transcription);
     const estimatedTempo = estimateTempo(transcription);
 
     // Step 3: Optionally process with Claude AI for performance-ready lyrics
@@ -88,6 +92,7 @@ export async function POST(request: NextRequest) {
           songDurationMs: transcription.duration * 1000,
           includeBreathMarkers: false,
           includeEmphasisMarkers: false,
+          includeSectionMarkers: false,
         });
 
         processedLyrics = {
@@ -112,6 +117,7 @@ export async function POST(request: NextRequest) {
     const response: TranscribeResponse = {
       transcript: transcription.transcript,
       formattedLyrics,
+      timedLines,
       processedLyrics: processedLyrics || undefined,
       metadata: {
         duration: transcription.duration,

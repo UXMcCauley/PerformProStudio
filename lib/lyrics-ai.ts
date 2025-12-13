@@ -195,7 +195,7 @@ Important:
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
+    max_tokens: 16384,
     messages: [
       { role: 'user', content: systemPrompt + '\n\n' + userPrompt }
     ]
@@ -297,13 +297,14 @@ function fallbackSplit(rawLyrics: string): ProcessedLyrics {
  * Quick format - simpler processing for basic line breaks
  */
 export async function quickFormatLyrics(rawLyrics: string): Promise<string> {
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
-    messages: [
-      {
-        role: 'user',
-        content: `You are a music lyric formatter. Format these lyrics for a teleprompter:
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8192,
+      messages: [
+        {
+          role: 'user',
+          content: `You are a music lyric formatter. Format these lyrics for a teleprompter:
 
 1. Break into natural singing phrases (one phrase per line)
 2. Add section markers: [Verse 1], [Chorus], [Bridge], etc.
@@ -317,16 +318,20 @@ ${rawLyrics}
 """
 
 Return ONLY the formatted lyrics, no explanations.`
-      }
-    ]
-  });
+        }
+      ]
+    });
 
-  const content = response.content[0];
-  if (content.type === 'text') {
-    return content.text.trim();
+    const content = response.content[0];
+    if (content.type === 'text') {
+      return content.text.trim();
+    }
+
+    return rawLyrics;
+  } catch (error) {
+    console.error('Error in quickFormatLyrics:', error);
+    throw error;
   }
-
-  return rawLyrics;
 }
 
 /**
@@ -401,6 +406,8 @@ Return only the split lines, one per line, no numbering or bullets.`
 
 /**
  * Merge lyrics from the AI processor into the expected format for the database
+ * NOTE: Section markers are NOT included in the text - they're metadata only
+ * The teleprompter doesn't need section markers displayed as lyrics
  */
 export function toLyricLines(processed: ProcessedLyrics): Array<{
   line_number: number;
@@ -408,10 +415,19 @@ export function toLyricLines(processed: ProcessedLyrics): Array<{
   timestamp_ms: number | null;
 }> {
   return processed.lines
-    .filter(line => !line.isEmptyLine || line.text.trim()) // Keep non-empty lines
+    .filter(line => {
+      // Filter out empty lines and lines that are ONLY section markers
+      if (line.isEmptyLine) return false;
+      const text = line.text.trim();
+      if (!text) return false;
+      // Don't include lines that are just section markers like [Verse 1]
+      if (/^\[.*\]$/.test(text)) return false;
+      return true;
+    })
     .map((line, index) => ({
       line_number: index,
-      text: line.section ? `[${line.section}]\n${line.text}`.trim() : line.text,
+      // Use only the actual lyric text, not section markers
+      text: line.text.trim(),
       timestamp_ms: null
     }));
 }
@@ -454,6 +470,7 @@ export interface PerformanceProcessingOptions {
   tempo?: number;
   includeBreathMarkers?: boolean;
   includeEmphasisMarkers?: boolean;
+  includeSectionMarkers?: boolean;
   vocalStyle?: 'pop' | 'rock' | 'hip-hop' | 'r&b' | 'country' | 'folk' | 'classical' | 'musical-theater';
 }
 
@@ -491,6 +508,7 @@ const DEFAULT_PERFORMANCE_OPTIONS: PerformanceProcessingOptions = {
   targetSyllablesPerLine: 8,
   includeBreathMarkers: true,
   includeEmphasisMarkers: true,
+  includeSectionMarkers: true,
   vocalStyle: 'pop',
 };
 
@@ -585,7 +603,7 @@ Return ONLY valid JSON.`;
   try {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 8192,
+      max_tokens: 16384,
       messages: [
         { role: 'user', content: systemPrompt + '\n\n' + userPrompt }
       ]
@@ -799,8 +817,8 @@ function generatePerformanceText(
   let currentSection = '';
 
   for (const line of lines) {
-    // Add section header if changed
-    if (line.section && line.section !== currentSection) {
+    // Add section header if changed (only if includeSectionMarkers is enabled)
+    if (options.includeSectionMarkers !== false && line.section && line.section !== currentSection) {
       if (output.length > 0) output.push('');
 
       const sectionInfo = sections.find(s => s.label === line.section);

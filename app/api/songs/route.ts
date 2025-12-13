@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { title, artist, album, folder, tags, soundcloud_url, instrumental_url, completed, band_id, album_id, folder_id } = body;
+    const { title, artist, album, folder, tags, soundcloud_url, instrumental_url, artwork_url, completed, band_id, album_id, folder_id } = body;
 
     if (!title?.trim() || !artist?.trim()) {
       return NextResponse.json({ error: 'Title and artist are required' }, { status: 400 });
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
       tags: tags || [],
       soundcloud_url: soundcloud_url || null,
       instrumental_url: instrumental_url || null,
+      artwork_url: artwork_url || null,
       completed: completed || false,
       band_id: band_id || null,
       album_id: album_id || null,

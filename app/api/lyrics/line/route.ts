@@ -12,10 +12,15 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { lineId, text } = body;
+    const { lineId, text, timestamp_ms } = body;
 
-    if (!lineId || text === undefined) {
-      return NextResponse.json({ error: 'Line ID and text are required' }, { status: 400 });
+    if (!lineId) {
+      return NextResponse.json({ error: 'Line ID is required' }, { status: 400 });
+    }
+
+    // Must provide at least text or timestamp_ms
+    if (text === undefined && timestamp_ms === undefined) {
+      return NextResponse.json({ error: 'Text or timestamp_ms is required' }, { status: 400 });
     }
 
     const db = await getDb();
@@ -39,10 +44,21 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Build update object with only provided fields
+    const updateFields: Record<string, any> = {
+      updated_at: new Date().toISOString()
+    };
+    if (text !== undefined) {
+      updateFields.text = text;
+    }
+    if (timestamp_ms !== undefined) {
+      updateFields.timestamp_ms = timestamp_ms;
+    }
+
     // Update the line
     const result = await db.collection('lyric_lines').findOneAndUpdate(
       { _id: new ObjectId(lineId) },
-      { $set: { text, updated_at: new Date().toISOString() } },
+      { $set: updateFields },
       { returnDocument: 'after' }
     );
 
@@ -113,6 +129,60 @@ export async function POST(request: Request) {
     }, { status: 201 });
   } catch (error) {
     console.error('Error creating lyric line:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { lineId } = body;
+
+    if (!lineId) {
+      return NextResponse.json({ error: 'Line ID is required' }, { status: 400 });
+    }
+
+    const db = await getDb();
+
+    // Get the line to find the song and line number
+    const line = await db.collection('lyric_lines').findOne({
+      _id: new ObjectId(lineId)
+    });
+
+    if (!line) {
+      return NextResponse.json({ error: 'Line not found' }, { status: 404 });
+    }
+
+    // Verify the song belongs to the user
+    const song = await db.collection('songs').findOne({
+      _id: new ObjectId(line.song_id),
+      user_id: session.user.id
+    });
+
+    if (!song) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const deletedLineNumber = line.line_number;
+    const now = new Date().toISOString();
+
+    // Delete the line
+    await db.collection('lyric_lines').deleteOne({ _id: new ObjectId(lineId) });
+
+    // Decrement line_number for all lines after the deleted line
+    await db.collection('lyric_lines').updateMany(
+      { song_id: line.song_id, line_number: { $gt: deletedLineNumber } },
+      { $inc: { line_number: -1 }, $set: { updated_at: now } }
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting lyric line:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

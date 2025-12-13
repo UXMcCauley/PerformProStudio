@@ -30,8 +30,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error formatting lyrics:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to format lyrics' },
+      { error: `Failed to format lyrics: ${errorMessage}` },
       { status: 500 }
     );
   }

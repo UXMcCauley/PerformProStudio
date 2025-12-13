@@ -65,6 +65,12 @@ type TagConfig = {
   updated_at: string;
 };
 
+type TimedLine = {
+  text: string;
+  startMs: number;
+  endMs: number;
+};
+
 interface Props {
   song: Song | null;
   lyrics: LyricLine[];
@@ -121,11 +127,22 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   // Drag and drop state
   const [draggedLine, setDraggedLine] = useState<LyricLine | null>(null);
 
-  // Input mode: 'upload' (MP3) or 'paste' (manual text)
-  const [inputMode, setInputMode] = useState<'upload' | 'paste'>('upload');
-
   // Audio URL from upload
   const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null);
+
+  // Audio file upload state (for "audio only" mode - no lyrics extraction)
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioUploading, setAudioUploading] = useState(false);
+  const [showLyricsExtractor, setShowLyricsExtractor] = useState(true);
+
+  // URL Import state
+  const [importUrl, setImportUrl] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importedTimedLines, setImportedTimedLines] = useState<Array<{ text: string; lineNumber: number; timestamp_ms: number }>>([]);
+
+  // AI Analysis state
+  const [analyzingLyrics, setAnalyzingLyrics] = useState(false);
 
   const defaultTags = ['confident', 'needs practice'];
   const tagColors = ['purple', 'blue', 'green', 'red', 'orange', 'pink', 'cyan', 'yellow'];
@@ -520,45 +537,68 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
     setAiLoading(true);
     try {
-      
+
       const response = await fetch('/api/format-lyrics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lyrics: rawLyrics }),
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Format API error:', response.status, errorText);
+        throw new Error(`Failed to format lyrics: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (data.formattedLyrics) {
         setRawLyrics(data.formattedLyrics);
         alert('Lyrics formatted by AI!');
+      } else if (data.error) {
+        throw new Error(data.error);
       }
     } catch (error) {
       console.error('Error formatting lyrics:', error);
-      alert('Error formatting lyrics');
+      alert(error instanceof Error ? error.message : 'Error formatting lyrics');
     } finally {
       setAiLoading(false);
     }
   };
 
   const handleBreakIntoLines = () => {
-    
+
     const lines = rawLyrics
       .split('\n')
       .map(line => line.trim())
       .filter(line => line.length > 0);
 
-    const newLyrics: LyricLine[] = lines.map((text, index) => ({
-      _id: crypto.randomUUID(),
-      song_id: song?._id || '',
-      line_number: index,
-      text,
-      timestamp_ms: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }));
+    // Create a map of imported timed lines for quick lookup
+    const timedLinesMap = new Map<string, number>();
+    importedTimedLines.forEach(tl => {
+      timedLinesMap.set(tl.text.trim().toLowerCase(), tl.timestamp_ms);
+    });
+
+    const newLyrics: LyricLine[] = lines.map((text, index) => {
+      // Try to find matching timestamp from imported synced lyrics
+      const matchedTimestamp = timedLinesMap.get(text.trim().toLowerCase());
+      // Also check by line number if text didn't match
+      const lineByIndex = importedTimedLines.find(tl => tl.lineNumber === index + 1);
+
+      return {
+        _id: crypto.randomUUID(),
+        song_id: song?._id || '',
+        line_number: index,
+        text,
+        timestamp_ms: matchedTimestamp ?? lineByIndex?.timestamp_ms ?? null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    });
 
     onLyricsChange(newLyrics);
+    // Clear imported timed lines after use
+    setImportedTimedLines([]);
   };
 
   const handleSave = async () => {
@@ -720,11 +760,96 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     onLyricsChange(updatedLyrics);
   };
 
+  // Handle URL import (SoundCloud, Spotify, etc.)
+  const handleUrlImport = async () => {
+    if (!importUrl.trim()) return;
+
+    setIsImporting(true);
+    setImportError(null);
+
+    try {
+      const response = await fetch('/api/import/url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: importUrl.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setImportError(data.error || 'Failed to import from URL');
+        return;
+      }
+
+      const track = data.track;
+
+      // Auto-fill song metadata
+      if (track.title && !title) {
+        setTitle(track.title);
+      }
+      if (track.artist) {
+        // Try to find matching band or use as title fallback
+        const matchingBand = availableBands.find(
+          b => b.name.toLowerCase() === track.artist.toLowerCase()
+        );
+        if (matchingBand) {
+          setSelectedBandId(matchingBand._id);
+        }
+      }
+      if (track.album && !album) {
+        setAlbum(track.album);
+      }
+
+      // Set the URL based on service
+      if (track.service === 'soundcloud') {
+        setSoundcloudUrl(track.url);
+      } else {
+        // For Spotify, YouTube, etc., we can't play directly but store the URL
+        // They might have an instrumental URL separately
+        setSoundcloudUrl(track.url);
+      }
+
+      // Handle imported lyrics if available
+      if (data.lyrics) {
+        const { synced, plain } = data.lyrics;
+
+        if (synced && synced.length > 0) {
+          // Use synced lyrics with timestamps
+          const formattedLyrics = synced
+            .map((line: { text: string; timestamp_ms: number }) => line.text)
+            .join('\n');
+          setRawLyrics(formattedLyrics);
+
+          // Store the synced timestamps for later use when breaking into lines
+          const timedLines = synced.map((line: { text: string; timestamp_ms: number }, index: number) => ({
+            text: line.text,
+            lineNumber: index + 1,
+            timestamp_ms: line.timestamp_ms,
+          }));
+          setImportedTimedLines(timedLines);
+        } else if (plain && plain.length > 0) {
+          // Use plain lyrics without timestamps
+          setRawLyrics(plain.join('\n'));
+        }
+      }
+
+      setImportUrl('');
+      setImportError(null);
+    } catch (error) {
+      console.error('Error importing from URL:', error);
+      setImportError('Failed to connect to import service');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // Handle lyrics from AudioUploader
   const handleAudioLyricsReady = (
     extractedLyrics: string,
     processedLyrics?: { lines: Array<{ text: string; lineNumber: number; section?: string }> },
-    audioUrl?: string
+    audioUrl?: string,
+    _metadata?: { duration: number; confidence: number; language: string; estimatedTempo: number; wordCount: number },
+    timedLines?: TimedLine[]
   ) => {
     // Store the audio URL for potential playback
     if (audioUrl) {
@@ -738,7 +863,23 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     // Set the raw lyrics text
     setRawLyrics(extractedLyrics);
 
-    // Convert to lyric lines
+    // If we have timed lines with timestamps, use those directly
+    if (timedLines && timedLines.length > 0) {
+      const newLyrics: LyricLine[] = timedLines.map((timedLine, index) => ({
+        _id: crypto.randomUUID(),
+        song_id: song?._id || '',
+        line_number: index,
+        text: timedLine.text,
+        timestamp_ms: timedLine.startMs,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+
+      onLyricsChange(newLyrics);
+      return;
+    }
+
+    // Fallback: Convert to lyric lines without timestamps
     const lines = extractedLyrics
       .split('\n')
       .map(line => line.trim())
@@ -755,6 +896,126 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     }));
 
     onLyricsChange(newLyrics);
+  };
+
+  // Handle audio-only upload (no lyrics extraction)
+  const handleAudioOnlyUpload = async (file: File) => {
+    const allowedTypes = [
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/wav',
+      'audio/wave',
+      'audio/x-wav',
+      'audio/ogg',
+      'audio/flac',
+      'audio/m4a',
+      'audio/mp4',
+      'audio/x-m4a',
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please upload an audio file (MP3, WAV, OGG, FLAC, or M4A)');
+      return;
+    }
+
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      alert('File is too large. Maximum size is 50MB');
+      return;
+    }
+
+    setAudioFile(file);
+    setAudioUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+
+      const uploadResult = await uploadResponse.json();
+      setUploadedAudioUrl(uploadResult.url);
+      if (!soundcloudUrl) {
+        setInstrumentalUrl(uploadResult.url);
+      }
+    } catch (err) {
+      console.error('Audio upload error:', err);
+      alert(err instanceof Error ? err.message : 'Failed to upload audio');
+      setAudioFile(null);
+    } finally {
+      setAudioUploading(false);
+    }
+  };
+
+  // AI Analysis: Compare pasted lyrics against uploaded audio
+  const handleAnalyzeLyrics = async () => {
+    if (!rawLyrics.trim()) {
+      alert('Please paste lyrics first');
+      return;
+    }
+
+    if (!uploadedAudioUrl) {
+      alert('Please upload an audio file first');
+      return;
+    }
+
+    setAnalyzingLyrics(true);
+    try {
+      const response = await fetch('/api/analyze-lyrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lyrics: rawLyrics,
+          audioUrl: uploadedAudioUrl,
+          songTitle: title,
+          artistName: availableBands.find(b => b._id === selectedBandId)?.name,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Analysis failed');
+      }
+
+      const result = await response.json();
+
+      // If we got timed lines back, use them
+      if (result.timedLines && result.timedLines.length > 0) {
+        const newLyrics: LyricLine[] = result.timedLines.map((timedLine: { text: string; startMs: number }, index: number) => ({
+          _id: crypto.randomUUID(),
+          song_id: song?._id || '',
+          line_number: index,
+          text: timedLine.text,
+          timestamp_ms: timedLine.startMs,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+        onLyricsChange(newLyrics);
+
+        if (result.corrections && result.corrections.length > 0) {
+          alert(`Lyrics analyzed and timed!\n\nSuggested corrections:\n${result.corrections.slice(0, 5).map((c: { original: string; suggested: string }) => `• "${c.original}" → "${c.suggested}"`).join('\n')}${result.corrections.length > 5 ? `\n...and ${result.corrections.length - 5} more` : ''}`);
+        } else {
+          alert('Lyrics analyzed and timestamps added!');
+        }
+      } else if (result.formattedLyrics) {
+        // Just use the formatted lyrics without timestamps
+        setRawLyrics(result.formattedLyrics);
+        alert('Lyrics analyzed and formatted!');
+      }
+    } catch (err) {
+      console.error('Lyrics analysis error:', err);
+      alert(err instanceof Error ? err.message : 'Failed to analyze lyrics');
+    } finally {
+      setAnalyzingLyrics(false);
+    }
   };
 
   const addTag = (tag: string) => {
@@ -1044,169 +1305,432 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       </div>
 
       {lyrics.length === 0 ? (
-        <div>
-          {/* Input Mode Toggle */}
-          <div className="flex items-center gap-2 mb-4">
-            <button
-              onClick={() => setInputMode('upload')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                inputMode === 'upload'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-base-200 text-base-content/70 hover:bg-base-300'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3v11.25" />
-              </svg>
-              <span className="text-sm font-medium">Upload MP3</span>
-            </button>
-            <button
-              onClick={() => setInputMode('paste')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                inputMode === 'paste'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-base-200 text-base-content/70 hover:bg-base-300'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <span className="text-sm font-medium">Paste Lyrics</span>
-            </button>
-          </div>
-
-          {/* MP3 Upload Mode */}
-          {inputMode === 'upload' && (
-            <div>
-              <AudioUploader
-                onLyricsReady={handleAudioLyricsReady}
-                onCancel={() => setInputMode('paste')}
-                songTitle={title}
-                artistName={availableBands.find(b => b._id === selectedBandId)?.name}
-              />
-              <p className="text-xs text-base-content/50 text-center mt-4">
-                Upload your song and AI will extract and format the lyrics automatically
-              </p>
-            </div>
-          )}
-
-          {/* Manual Paste Mode */}
-          {inputMode === 'paste' && (
-            <div>
-              <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
-                <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <div className="space-y-6">
+          {/* Toggle between Extract from MP3 and Paste Lyrics */}
+          <div className="flex justify-center mb-4">
+            <div className="inline-flex rounded-xl border border-base-300 p-1 bg-base-200">
+              <button
+                onClick={() => setShowLyricsExtractor(true)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                  showLyricsExtractor
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'text-base-content/70 hover:text-base-content'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                Extract from MP3
+              </button>
+              <button
+                onClick={() => setShowLyricsExtractor(false)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                  !showLyricsExtractor
+                    ? 'bg-purple-600 text-white shadow-md'
+                    : 'text-base-content/70 hover:text-base-content'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Paste Lyrics
+              </button>
+            </div>
+          </div>
+
+          {/* Show AudioUploader if extracting lyrics from audio */}
+          {showLyricsExtractor ? (
+            <div className="border border-base-300 rounded-xl p-4 bg-base-100">
+              <label className="block text-xs md:text-sm font-semibold text-base-content mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                Extract Lyrics from Audio
               </label>
-              <textarea
-                value={rawLyrics}
-                onChange={e => setRawLyrics(e.target.value)}
-                onPaste={handlePaste}
-                className="w-full h-48 md:h-64 px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono text-sm md:text-base transition-all duration-300"
-                placeholder="Paste your lyrics here..."
+              <p className="text-sm text-base-content/60 mb-4">
+                Upload an MP3 file and Deepgram AI will transcribe the vocals and extract lyrics with timestamps.
+              </p>
+              <AudioUploader
+                onLyricsReady={handleAudioLyricsReady}
+                onCancel={() => setShowLyricsExtractor(false)}
+                songTitle={title}
+                artistName={availableBands.find(b => b._id === selectedBandId)?.name}
               />
-              {showProcessSuggestion && (
-                <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl flex items-center gap-3">
-                  <div className="flex-shrink-0">
-                    <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-purple-800">AI Processing Recommended</p>
-                    <p className="text-xs text-purple-600">{processSuggestionReason}</p>
-                  </div>
+
+              {/* OR Divider */}
+              <div className="flex items-center gap-4 my-4">
+                <div className="flex-1 h-px bg-base-300" />
+                <span className="text-sm text-base-content/50 font-medium">OR</span>
+                <div className="flex-1 h-px bg-base-300" />
+              </div>
+
+              {/* URL Import Section */}
+              <div className="border border-base-300 rounded-xl p-4 bg-base-200/50">
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Import from URL
+                </label>
+                <p className="text-sm text-base-content/60 mb-3">
+                  Paste a SoundCloud, Spotify, YouTube, or Apple Music link to auto-fill song details.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleUrlImport()}
+                    className="flex-1 px-3 py-2 bg-base-100 border border-base-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-sm"
+                    placeholder="https://soundcloud.com/... or https://open.spotify.com/..."
+                  />
                   <button
-                    onClick={handleSmartProcess}
-                    disabled={smartProcessing}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                    onClick={handleUrlImport}
+                    disabled={isImporting || !importUrl.trim()}
+                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg font-medium text-sm transition-colors flex items-center gap-2"
                   >
-                    {smartProcessing ? (
+                    {isImporting ? (
                       <>
                         <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                           <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
                           <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
                         </svg>
-                        Processing...
+                        Importing...
                       </>
                     ) : (
                       <>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                         </svg>
-                        Smart Process
+                        Import
                       </>
                     )}
                   </button>
-                  <button
-                    onClick={() => setShowProcessSuggestion(false)}
-                    className="p-1 text-purple-400 hover:text-purple-600 transition-colors"
-                    title="Dismiss"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
                 </div>
-              )}
-              <div className="flex gap-2 mt-4 items-center">
-                <button
-                  onClick={handleSmartProcess}
-                  disabled={smartProcessing}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
-                    smartProcessing
-                      ? 'bg-purple-100 text-purple-400'
-                      : 'bg-purple-600 text-white hover:bg-purple-700'
-                  }`}
-                  title={smartProcessing ? 'Processing...' : 'Smart AI Process - Analyzes structure, adds sections, optimizes for teleprompter'}
-                >
-                  {smartProcessing ? (
-                    <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
-                      <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                  )}
-                  <span className="text-sm font-medium">{smartProcessing ? 'Processing...' : 'Smart Process'}</span>
-                </button>
-                <div className="h-6 w-px bg-base-300" />
-                <button
-                  onClick={handleAIFormat}
-                  disabled={aiLoading}
-                  className={`p-2 transition-all duration-200 ${
-                    aiLoading ? 'text-base-content/30' : 'text-base-content/70 hover:text-purple-600'
-                  }`}
-                  title={aiLoading ? 'Formatting...' : 'Quick AI Format'}
-                >
-                  {aiLoading ? (
-                    <svg className="w-7 h-7 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  ) : (
-                    <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  )}
-                </button>
-                <button
-                  onClick={handleBreakIntoLines}
-                  className="p-2 text-base-content/70 hover:text-purple-600 transition-all duration-200"
-                  title="Break into Lines"
-                >
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
+                {importError && (
+                  <p className="mt-2 text-sm text-red-500">{importError}</p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">SoundCloud</span>
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">Spotify</span>
+                  <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">YouTube</span>
+                  <span className="px-2 py-1 bg-pink-100 text-pink-700 text-xs rounded-full">Apple Music</span>
+                  <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">Deezer</span>
+                </div>
               </div>
             </div>
+          ) : (
+            <>
+              {/* Lyrics Paste Section */}
+              <div>
+                <label className="block text-xs md:text-sm font-semibold text-base-content mb-2 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Paste Lyrics
+                </label>
+                <textarea
+                  value={rawLyrics}
+                  onChange={e => setRawLyrics(e.target.value)}
+                  onPaste={handlePaste}
+                  className="w-full h-48 md:h-64 px-3 md:px-4 py-2 bg-base-100 backdrop-blur-xs border border-base-300 rounded-xl focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 font-mono text-sm md:text-base transition-all duration-300"
+                  placeholder="Paste your lyrics here..."
+                />
+
+                {/* AI Processing Suggestion - with Smart Process button inside */}
+                {showProcessSuggestion && (
+                  <div className="mt-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0">
+                        <svg className="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-purple-800">AI Processing Recommended</p>
+                        <p className="text-xs text-purple-600">{processSuggestionReason}</p>
+                      </div>
+                      <button
+                        onClick={handleSmartProcess}
+                        disabled={smartProcessing}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                      >
+                        {smartProcessing ? (
+                          <>
+                            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                              <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                            </svg>
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            Smart Process
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => setShowProcessSuggestion(false)}
+                        className="p-1 text-purple-400 hover:text-purple-600 transition-colors"
+                        title="Dismiss"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Audio Sync Section - Upload MP3 and Analyze */}
+                {rawLyrics.trim() && (
+                  <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 p-2 bg-green-100 rounded-lg">
+                          <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-800">Sync with Audio</p>
+                          <p className="text-xs text-green-600">Upload MP3 to add timestamps and verify lyrics match the song</p>
+                        </div>
+                      </div>
+
+                      {/* Uploaded audio info or upload button */}
+                      {uploadedAudioUrl ? (
+                        <div className="flex items-center gap-3 p-3 bg-white/50 rounded-lg">
+                          <div className="p-2 bg-green-100 rounded-lg">
+                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-green-800 text-sm truncate">
+                              {audioFile?.name || 'Audio uploaded'}
+                            </p>
+                            <p className="text-xs text-green-600">
+                              {audioFile ? `${(audioFile.size / 1024 / 1024).toFixed(1)} MB` : 'Ready for analysis'}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setUploadedAudioUrl(null);
+                              setAudioFile(null);
+                              setInstrumentalUrl('');
+                            }}
+                            className="btn btn-ghost btn-sm btn-circle text-green-600 hover:text-error"
+                            title="Remove audio"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          {/* Analyze button - inside the green container */}
+                          <button
+                            onClick={handleAnalyzeLyrics}
+                            disabled={analyzingLyrics}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 ${
+                              analyzingLyrics
+                                ? 'bg-green-200 text-green-500'
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
+                            title="Analyze lyrics against audio to add timestamps"
+                          >
+                            {analyzingLyrics ? (
+                              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                                <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                              </svg>
+                            )}
+                            <span className="text-sm font-medium">{analyzingLyrics ? 'Analyzing...' : 'Analyze'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                          audioUploading
+                            ? 'bg-green-200 text-green-500'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}>
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            className="hidden"
+                            onChange={(e) => e.target.files?.[0] && handleAudioOnlyUpload(e.target.files[0])}
+                            disabled={audioUploading}
+                          />
+                          {audioUploading ? (
+                            <>
+                              <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                                <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                              </svg>
+                              <span className="text-sm font-medium">Uploading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15m0-3l-3-3m0 0l-3 3m3-3v11.25" />
+                              </svg>
+                              <span className="text-sm font-medium">Upload MP3</span>
+                            </>
+                          )}
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Text Processing Actions - grouped together */}
+                <div className="mt-4 p-3 bg-base-200 rounded-xl">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-xs font-medium text-base-content/60 mr-2">Text Processing:</span>
+                    <button
+                      onClick={handleSmartProcess}
+                      disabled={smartProcessing || !rawLyrics.trim()}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${
+                        smartProcessing || !rawLyrics.trim()
+                          ? 'bg-purple-100 text-purple-400'
+                          : 'bg-purple-600 text-white hover:bg-purple-700'
+                      }`}
+                      title="Smart AI Process - Analyzes structure, adds sections, optimizes for teleprompter"
+                    >
+                      {smartProcessing ? (
+                        <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                          <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      )}
+                      <span>{smartProcessing ? 'Processing...' : 'Smart Process'}</span>
+                    </button>
+                    <button
+                      onClick={handleAIFormat}
+                      disabled={aiLoading || !rawLyrics.trim()}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${
+                        aiLoading || !rawLyrics.trim()
+                          ? 'bg-base-300 text-base-content/40'
+                          : 'bg-base-100 text-base-content/70 hover:text-purple-600 border border-base-300'
+                      }`}
+                      title="Quick AI Format"
+                    >
+                      {aiLoading ? (
+                        <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      )}
+                      <span>Quick Format</span>
+                    </button>
+                    <button
+                      onClick={handleBreakIntoLines}
+                      disabled={!rawLyrics.trim()}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all duration-200 ${
+                        !rawLyrics.trim()
+                          ? 'bg-base-300 text-base-content/40'
+                          : 'bg-base-100 text-base-content/70 hover:text-purple-600 border border-base-300'
+                      }`}
+                      title="Break into Lines"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                      </svg>
+                      <span>Break Lines</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
           )}
         </div>
       ) : (
         <div>
+          {/* Upload Audio Section - collapsible when lyrics exist */}
+          <div className="mb-4">
+            <button
+              onClick={() => setShowLyricsExtractor(!showLyricsExtractor)}
+              className="flex items-center gap-2 text-sm font-medium text-purple-600 hover:text-purple-700 transition-colors mb-2"
+            >
+              <svg
+                className={`w-4 h-4 transition-transform duration-200 ${showLyricsExtractor ? 'rotate-90' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
+              Upload / Re-extract from Audio
+            </button>
+            {showLyricsExtractor && (
+              <div className="border border-purple-200 rounded-xl p-4 bg-purple-50/50">
+                <p className="text-sm text-base-content/60 mb-3">
+                  Upload an MP3 to extract new lyrics or re-sync timestamps with Deepgram AI.
+                </p>
+                <AudioUploader
+                  onLyricsReady={handleAudioLyricsReady}
+                  onCancel={() => setShowLyricsExtractor(false)}
+                  songTitle={title}
+                  artistName={availableBands.find(b => b._id === selectedBandId)?.name}
+                />
+
+                {/* OR Divider */}
+                <div className="flex items-center gap-4 my-4">
+                  <div className="flex-1 h-px bg-purple-200" />
+                  <span className="text-sm text-purple-400 font-medium">OR</span>
+                  <div className="flex-1 h-px bg-purple-200" />
+                </div>
+
+                {/* URL Import */}
+                <div className="border border-orange-200 rounded-xl p-3 bg-orange-50/50">
+                  <label className="block text-xs font-semibold text-base-content mb-2 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    Import from URL
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={importUrl}
+                      onChange={(e) => setImportUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleUrlImport()}
+                      className="flex-1 px-3 py-2 bg-white border border-orange-200 rounded-lg focus:outline-none focus:border-orange-500 text-sm"
+                      placeholder="SoundCloud, Spotify, YouTube..."
+                    />
+                    <button
+                      onClick={handleUrlImport}
+                      disabled={isImporting || !importUrl.trim()}
+                      className="px-3 py-2 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg font-medium text-sm transition-colors"
+                    >
+                      {isImporting ? '...' : 'Import'}
+                    </button>
+                  </div>
+                  {importError && (
+                    <p className="mt-2 text-xs text-red-500">{importError}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-2">
             <button
               onClick={() => setLyricsCollapsed(!lyricsCollapsed)}

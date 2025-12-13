@@ -14,13 +14,34 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const songId = searchParams.get('songId');
     const type = searchParams.get('type');
+    const db = await getDb();
+
+    // Get all sessions for user (for analytics)
+    if (type === 'all-sessions') {
+      // Get all user's songs first
+      const userSongs = await db.collection('songs').find({
+        user_id: session.user.id
+      }).toArray();
+
+      const songIds = userSongs.map(s => s._id.toString());
+
+      // Get all practice sessions for those songs
+      const allSessions = await db.collection('practice_sessions')
+        .find({ song_id: { $in: songIds } })
+        .sort({ started_at: -1 })
+        .toArray();
+
+      return NextResponse.json(allSessions.map(s => ({
+        ...s,
+        _id: s._id.toString()
+      })));
+    }
 
     if (!songId) {
       return NextResponse.json({ error: 'Song ID is required' }, { status: 400 });
     }
 
     // Verify the song belongs to the user
-    const db = await getDb();
     const song = await db.collection('songs').findOne({
       _id: new ObjectId(songId),
       user_id: session.user.id

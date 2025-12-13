@@ -95,8 +95,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Song not found' }, { status: 404 });
     }
 
-    // Bulk update timestamps
-    const bulkOps = lyrics.map((line: { _id: string; timestamp_ms: number | null }) => ({
+    // Filter out lines with invalid ObjectIds (UUIDs from unsaved client-side lines)
+    const isValidObjectId = (id: string) => /^[a-f\d]{24}$/i.test(id);
+    const validLines = lyrics.filter((line: { _id: string; timestamp_ms: number | null }) =>
+      isValidObjectId(line._id)
+    );
+
+    // Bulk update timestamps for valid lines only
+    const bulkOps = validLines.map((line: { _id: string; timestamp_ms: number | null }) => ({
       updateOne: {
         filter: { _id: new ObjectId(line._id), song_id: songId },
         update: { $set: { timestamp_ms: line.timestamp_ms, updated_at: new Date().toISOString() } }
@@ -107,7 +113,13 @@ export async function PUT(request: Request) {
       await db.collection('lyric_lines').bulkWrite(bulkOps);
     }
 
-    return NextResponse.json({ success: true, updated: bulkOps.length });
+    const skipped = lyrics.length - validLines.length;
+    return NextResponse.json({
+      success: true,
+      updated: bulkOps.length,
+      skipped: skipped > 0 ? skipped : undefined,
+      message: skipped > 0 ? `${skipped} unsaved lines were skipped. Save the song first to persist all lyrics.` : undefined
+    });
   } catch (error) {
     console.error('Error updating lyrics timestamps:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

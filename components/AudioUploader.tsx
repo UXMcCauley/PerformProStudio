@@ -24,6 +24,12 @@ interface ProcessedLyrics {
   };
 }
 
+interface TimedLine {
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
 interface TranscriptionMetadata {
   duration: number;
   confidence: number;
@@ -33,7 +39,7 @@ interface TranscriptionMetadata {
 }
 
 interface AudioUploaderProps {
-  onLyricsReady: (lyrics: string, processedLyrics?: ProcessedLyrics, audioUrl?: string, metadata?: TranscriptionMetadata) => void;
+  onLyricsReady: (lyrics: string, processedLyrics?: ProcessedLyrics, audioUrl?: string, metadata?: TranscriptionMetadata, timedLines?: TimedLine[]) => void;
   onCancel?: () => void;
   songTitle?: string;
   artistName?: string;
@@ -55,6 +61,7 @@ export default function AudioUploader({
   const [formattedLyrics, setFormattedLyrics] = useState<string>('');
   const [processedLyrics, setProcessedLyrics] = useState<ProcessedLyrics | null>(null);
   const [metadata, setMetadata] = useState<TranscriptionMetadata | null>(null);
+  const [timedLines, setTimedLines] = useState<TimedLine[]>([]);
   const [editedLyrics, setEditedLyrics] = useState<string>('');
   const [isEditing, setIsEditing] = useState(false);
 
@@ -158,6 +165,7 @@ export default function AudioUploader({
       setRawTranscript(transcribeResult.transcript);
       setFormattedLyrics(transcribeResult.formattedLyrics);
       setMetadata(transcribeResult.metadata);
+      setTimedLines(transcribeResult.timedLines || []);
 
       if (transcribeResult.processedLyrics) {
         setProcessedLyrics(transcribeResult.processedLyrics);
@@ -198,7 +206,8 @@ export default function AudioUploader({
       finalLyrics,
       processedLyrics || undefined,
       audioUrl || undefined,
-      metadata || undefined
+      metadata || undefined,
+      timedLines.length > 0 ? timedLines : undefined
     );
   };
 
@@ -210,6 +219,7 @@ export default function AudioUploader({
     setFormattedLyrics('');
     setProcessedLyrics(null);
     setMetadata(null);
+    setTimedLines([]);
     setEditedLyrics('');
     setIsEditing(false);
     setError(null);
