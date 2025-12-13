@@ -1336,20 +1336,20 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
   return (
     <div className="">
-      <div  className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
         {showBackButton && onBack && (
           <button
             onClick={onBack}
-            className="p-2 text-base-content/70 hover:text-purple-600 transition-all duration-200"
+            className="p-1.5 sm:p-2 text-base-content/70 hover:text-purple-600 transition-all duration-200"
             title="Back"
           >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
           </button>
         )}
-        <div className="w-1 h-8 bg-purple-600" />
-        <div className="flex-1">
+        <div className="w-1 h-6 sm:h-8 bg-purple-600" />
+        <div className="flex-1 min-w-0">
           {editingTitle ? (
             <input
               type="text"
@@ -1363,14 +1363,14 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   setEditingTitle(false);
                 }
               }}
-              className="text-xl md:text-2xl font-bold text-base-content bg-transparent border-b-2 border-primary focus:outline-hidden w-full"
+              className="text-lg sm:text-xl md:text-2xl font-bold text-base-content bg-transparent border-b-2 border-primary focus:outline-hidden w-full"
               placeholder={`${CONTENT_TYPE_LABELS[contentType].singular} title`}
               autoFocus
             />
           ) : (
             <h2
               onClick={() => setEditingTitle(true)}
-              className="text-xl md:text-2xl font-bold text-base-content cursor-pointer hover:text-primary transition-colors"
+              className="text-lg sm:text-xl md:text-2xl font-bold text-base-content cursor-pointer hover:text-primary transition-colors truncate"
               title="Click to edit"
             >
               {title || `New ${CONTENT_TYPE_LABELS[contentType].singular}`}
@@ -1398,7 +1398,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                 <select
                   value={selectedBandId}
                   onChange={e => setSelectedBandId(e.target.value)}
-                  className="select select-bordered w-full"
+                  className="select select-bordered select-sm sm:select-md w-full"
                 >
                   <option value="">{CONTENT_TYPE_LABELS[contentType].bandPlaceholder}</option>
                   {availableBands.map(band => (
@@ -1420,7 +1420,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   <select
                     value={album}
                     onChange={e => setAlbum(e.target.value)}
-                    className="select select-bordered flex-1"
+                    className="select select-bordered select-sm sm:select-md flex-1"
                     disabled={!selectedBandId}
                   >
                     <option value="">{CONTENT_TYPE_LABELS[contentType].albumPlaceholder}</option>
@@ -1455,7 +1455,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   <select
                     value={folder}
                     onChange={e => setFolder(e.target.value)}
-                    className="select select-bordered flex-1"
+                    className="select select-bordered select-sm sm:select-md flex-1"
                     disabled={!selectedBandId}
                   >
                     <option value="">No {CONTENT_TYPE_LABELS[contentType].folderLabel}</option>

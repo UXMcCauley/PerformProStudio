@@ -173,7 +173,8 @@ export default function Home() {
         pendingSocialCount={pendingSocialCount}
       />
 
-      <div className="mx-auto px-2 md:px-4 pt-24 pb-8">
+      {/* Add padding for top header (h-14 mobile, h-16 desktop) and bottom nav on mobile */}
+      <div className="mx-auto px-2 sm:px-4 pt-16 sm:pt-20 pb-20 lg:pb-8">
         <div className="max-w-7xl mx-auto">
           {activeTab === 'library' && (
             <SongLibrary

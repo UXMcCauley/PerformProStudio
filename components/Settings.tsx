@@ -340,16 +340,70 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
         <h2 className="text-xl md:text-2xl font-bold text-base-content">Settings</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Sidebar Navigation */}
-        <div className="md:col-span-1">
+      {/* Mobile: Horizontal scroll tabs */}
+      <div className="md:hidden mb-4 -mx-4 px-4">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <button
+            onClick={() => setActiveSection('personal')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'personal' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            👤 Personal
+          </button>
+          <button
+            onClick={() => setActiveSection('bands')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'bands' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            🎵 Bands {bands.length > 0 && `(${bands.length})`}
+          </button>
+          <button
+            onClick={() => setActiveSection('productions')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'productions' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            🎭 Productions {productions.length > 0 && `(${productions.length})`}
+          </button>
+          <button
+            onClick={() => setActiveSection('podcasts')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'podcasts' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            🎙️ Podcasts {podcasts.length > 0 && `(${podcasts.length})`}
+          </button>
+          <button
+            onClick={() => setActiveSection('organizations')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'organizations' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            📢 Orgs {organizations.length > 0 && `(${organizations.length})`}
+          </button>
+          <button
+            onClick={() => setActiveSection('tags')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'tags' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            🏷️ Tags
+          </button>
+          <button
+            onClick={() => setActiveSection('integrations')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'integrations' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            🔗 Import
+          </button>
+          <button
+            onClick={() => setActiveSection('theme')}
+            className={`btn btn-sm whitespace-nowrap ${activeSection === 'theme' ? 'btn-primary' : 'btn-ghost'}`}
+          >
+            🎨 Theme
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
+        {/* Desktop Sidebar Navigation */}
+        <div className="hidden md:block md:col-span-1">
           <ul className="menu bg-base-200 rounded-box">
             <li>
               <a
                 onClick={() => setActiveSection('personal')}
                 className={activeSection === 'personal' ? 'active' : ''}
               >
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                 </svg>
                 Personal Info
@@ -363,7 +417,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 onClick={() => setActiveSection('bands')}
                 className={activeSection === 'bands' ? 'active' : ''}
               >
-                <span className="text-lg">🎵</span>
+                <span className="text-base">🎵</span>
                 Bands
                 {bands.length > 0 && <span className="badge badge-sm">{bands.length}</span>}
               </a>
@@ -373,7 +427,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 onClick={() => setActiveSection('productions')}
                 className={activeSection === 'productions' ? 'active' : ''}
               >
-                <span className="text-lg">🎭</span>
+                <span className="text-base">🎭</span>
                 Productions
                 {productions.length > 0 && <span className="badge badge-sm">{productions.length}</span>}
               </a>
@@ -383,7 +437,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 onClick={() => setActiveSection('podcasts')}
                 className={activeSection === 'podcasts' ? 'active' : ''}
               >
-                <span className="text-lg">🎙️</span>
+                <span className="text-base">🎙️</span>
                 Podcasts
                 {podcasts.length > 0 && <span className="badge badge-sm">{podcasts.length}</span>}
               </a>
@@ -393,7 +447,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 onClick={() => setActiveSection('organizations')}
                 className={activeSection === 'organizations' ? 'active' : ''}
               >
-                <span className="text-lg">📢</span>
+                <span className="text-base">📢</span>
                 Organizations
                 {organizations.length > 0 && <span className="badge badge-sm">{organizations.length}</span>}
               </a>
@@ -406,7 +460,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 onClick={() => setActiveSection('tags')}
                 className={activeSection === 'tags' ? 'active' : ''}
               >
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
                 </svg>
@@ -418,7 +472,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 onClick={() => setActiveSection('integrations')}
                 className={activeSection === 'integrations' ? 'active' : ''}
               >
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                 </svg>
                 Integrations
