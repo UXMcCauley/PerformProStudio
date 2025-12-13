@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 type UserAlbum = {
   _id: string;
@@ -9,6 +9,7 @@ type UserAlbum = {
   display_order: number;
   song_count: number;
   user_id: string;
+  archived_at?: string | null;
 };
 
 type Song = {
@@ -48,6 +49,7 @@ interface Props {
 
 export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToList }: Props) {
   const [albums, setAlbums] = useState<UserAlbum[]>([]);
+  const [archivedAlbums, setArchivedAlbums] = useState<UserAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAlbum, setSelectedAlbum] = useState<UserAlbum | null>(null);
   const [albumSongs, setAlbumSongs] = useState<Song[]>([]);
@@ -55,8 +57,17 @@ export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToLis
   const [reorderMode, setReorderMode] = useState(false);
   const [uploadingArt, setUploadingArt] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState<string | null>(null);
+  const [showAlbumMenu, setShowAlbumMenu] = useState<string | null>(null);
+  const [showArchives, setShowArchives] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingAlbumArt, setEditingAlbumArt] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Modal states
+  const [deleteModalAlbum, setDeleteModalAlbum] = useState<UserAlbum | null>(null);
+  const [permanentDeleteAlbum, setPermanentDeleteAlbum] = useState<UserAlbum | null>(null);
+  const [editDetailsAlbum, setEditDetailsAlbum] = useState<UserAlbum | null>(null);
+  const [editAlbumName, setEditAlbumName] = useState('');
 
   // Drag state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -64,6 +75,17 @@ export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToLis
 
   useEffect(() => {
     loadAlbums();
+  }, []);
+
+  // Close menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowAlbumMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const loadAlbums = async () => {

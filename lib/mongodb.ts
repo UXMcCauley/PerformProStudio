@@ -578,15 +578,25 @@ export type UserAlbum = {
   display_order: number;
   song_count: number;
   user_id: string;
+  archived_at?: string | null;
 };
 
-export async function getUserAlbums(userId: string): Promise<UserAlbum[]> {
+export async function getUserAlbums(userId: string, includeArchived: boolean = false): Promise<UserAlbum[]> {
   try {
     const db = await getDb();
 
+    // Build the query filter
+    const filter: Record<string, unknown> = { user_id: userId };
+    if (!includeArchived) {
+      filter.$or = [
+        { archived_at: null },
+        { archived_at: { $exists: false } }
+      ];
+    }
+
     // First try to get albums from the user_albums collection
     const userAlbums = await db.collection('user_albums')
-      .find({ user_id: userId })
+      .find(filter)
       .sort({ display_order: 1 })
       .toArray();
 
@@ -728,6 +738,70 @@ export async function deleteUserAlbum(userId: string, albumName: string): Promis
   } catch (error) {
     console.error('Error deleting user album:', error);
     return false;
+  }
+}
+
+export async function archiveUserAlbum(userId: string, albumName: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const result = await db.collection('user_albums').updateOne(
+      { user_id: userId, name: albumName },
+      { $set: { archived_at: now, updated_at: now } }
+    );
+
+    return result.modifiedCount > 0;
+  } catch (error) {
+    console.error('Error archiving user album:', error);
+    return false;
+  }
+}
+
+export async function restoreUserAlbum(userId: string, albumName: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const result = await db.collection('user_albums').updateOne(
+      { user_id: userId, name: albumName },
+      { $set: { archived_at: null, updated_at: now } }
+    );
+
+    return result.modifiedCount > 0;
+  } catch (error) {
+    console.error('Error restoring user album:', error);
+    return false;
+  }
+}
+
+export async function getArchivedUserAlbums(userId: string): Promise<UserAlbum[]> {
+  try {
+    const db = await getDb();
+
+    const userAlbums = await db.collection('user_albums')
+      .find({
+        user_id: userId,
+        archived_at: { $ne: null, $exists: true }
+      })
+      .sort({ archived_at: -1 })
+      .toArray();
+
+    // Get song counts for each album
+    const albumCounts = await db.collection('songs').aggregate([
+      { $match: { user_id: userId, album: { $ne: null } } },
+      { $group: { _id: '$album', count: { $sum: 1 } } }
+    ]).toArray();
+
+    const countMap = new Map(albumCounts.map(a => [a._id, a.count]));
+
+    return userAlbums.map(album => ({
+      ...toClientDoc(album),
+      song_count: countMap.get(album.name) || 0,
+    })) as UserAlbum[];
+  } catch (error) {
+    console.error('Error fetching archived albums:', error);
+    return [];
   }
 }
 

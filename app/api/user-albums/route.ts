@@ -6,6 +6,9 @@ import {
   createUserAlbum,
   updateUserAlbum,
   deleteUserAlbum,
+  archiveUserAlbum,
+  restoreUserAlbum,
+  getArchivedUserAlbums,
   reorderUserAlbums,
   getAlbumSongs
 } from '@/lib/mongodb';
@@ -19,6 +22,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const albumName = searchParams.get('albumName');
+    const archived = searchParams.get('archived');
 
     // If albumName is provided, get songs for that album
     if (albumName) {
@@ -26,7 +30,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ songs });
     }
 
-    // Otherwise, get all user albums
+    // If archived=true, get archived albums
+    if (archived === 'true') {
+      const archivedAlbums = await getArchivedUserAlbums(session.user.id);
+      return NextResponse.json(archivedAlbums);
+    }
+
+    // Otherwise, get all user albums (non-archived)
     const albums = await getUserAlbums(session.user.id);
     return NextResponse.json(albums);
   } catch (error) {
@@ -102,20 +112,41 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const albumName = searchParams.get('albumName');
+    const permanent = searchParams.get('permanent');
+    const action = searchParams.get('action');
 
     if (!albumName) {
       return NextResponse.json({ error: 'Album name is required' }, { status: 400 });
     }
 
-    const success = await deleteUserAlbum(session.user.id, albumName);
+    // Handle restore action
+    if (action === 'restore') {
+      const success = await restoreUserAlbum(session.user.id, albumName);
+      if (!success) {
+        return NextResponse.json({ error: 'Failed to restore album' }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    // If permanent=true, permanently delete the album
+    if (permanent === 'true') {
+      const success = await deleteUserAlbum(session.user.id, albumName);
+      if (!success) {
+        return NextResponse.json({ error: 'Failed to delete album' }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    // Default: archive the album (soft delete)
+    const success = await archiveUserAlbum(session.user.id, albumName);
 
     if (!success) {
-      return NextResponse.json({ error: 'Failed to delete album' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to archive album' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error deleting user album:', error);
+    console.error('Error deleting/archiving user album:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
