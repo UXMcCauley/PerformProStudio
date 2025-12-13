@@ -502,7 +502,7 @@ export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToLis
               <div
                 key={song._id}
                 onClick={() => handleSongClick(song)}
-                className="p-4 bg-base-100 rounded-lg border border-base-300 hover:border-primary cursor-pointer transition-colors"
+                className="group p-4 bg-base-100 rounded-lg border border-base-300 hover:border-primary cursor-pointer transition-colors relative"
               >
                 <div className="flex items-center gap-4">
                   <span className="text-base-content/40 w-6 text-center">{index + 1}</span>
@@ -513,6 +513,16 @@ export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToLis
                   {song.completed && (
                     <span className="badge badge-success badge-sm">Complete</span>
                   )}
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => handleDeleteSong(e, song)}
+                    className="w-8 h-8 bg-red-500/90 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Delete song"
+                  >
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             ))}
