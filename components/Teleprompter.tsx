@@ -1,7 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Script from 'next/script';
+import { speak, stopSpeaking, isSpeaking, VoiceType } from '@/lib/tts';
+
+type ContentType = 'lyrics' | 'script' | 'podcast' | 'speech';
+type LineType = 'lyric' | 'dialogue' | 'stage_direction' | 'talking_point' | 'question' | 'segment_header' | 'cue' | 'emphasis' | 'pause';
 
 type Song = {
   _id: string;
@@ -12,11 +16,16 @@ type Song = {
   tags: string[];
   soundcloud_url: string | null;
   instrumental_url: string | null;
+  artwork_url: string | null;
   completed: boolean;
   band_id: string | null;
   album_id: string | null;
   folder_id: string | null;
   user_id: string;
+  content_type: ContentType;
+  my_character_id: string | null;
+  episode_number: number | null;
+  duration_target_minutes: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -27,6 +36,25 @@ type LyricLine = {
   line_number: number;
   text: string;
   timestamp_ms: number | null;
+  character_id: string | null;
+  line_type: LineType;
+  notes: string | null;
+  duration_seconds: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CharacterRole = 'performer' | 'director' | 'narrator' | 'crew' | 'host' | 'guest';
+
+type Character = {
+  _id: string;
+  song_id: string;
+  name: string;
+  color: string;
+  voice_id: string | null;
+  is_user: boolean;
+  role: CharacterRole;
+  display_order: number;
   created_at: string;
   updated_at: string;
 };
@@ -135,6 +163,14 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
   const timelineLoopRef = useRef<boolean>(false);
   const timelinePanelRef = useRef<HTMLDivElement>(null);
 
+  // Script Practice Mode (TTS)
+  const [scriptPracticeMode, setScriptPracticeMode] = useState(false);
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [isTTSSpeaking, setIsTTSSpeaking] = useState(false);
+  const [scriptPracticeLineIndex, setScriptPracticeLineIndex] = useState(0);
+  const [scriptPracticeAutoAdvance, setScriptPracticeAutoAdvance] = useState(true);
+  const scriptPracticeActiveRef = useRef(false);
+
   // Keep refs in sync with state
   useEffect(() => {
     loopEnabledRef.current = loopEnabled;
@@ -192,6 +228,126 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
       setLoadingSongs(false);
     }
   };
+
+  // Load characters for script practice
+  const loadCharacters = useCallback(async (songId: string) => {
+    try {
+      const response = await fetch(`/api/characters?songId=${songId}`);
+      if (response.ok) {
+        const chars = await response.json();
+        setCharacters(chars);
+      }
+    } catch (error) {
+      console.error('Error loading characters:', error);
+    }
+  }, []);
+
+  // Load characters when song changes and it's a script
+  useEffect(() => {
+    if (song && song.content_type === 'script') {
+      loadCharacters(song._id);
+    } else {
+      setCharacters([]);
+      setScriptPracticeMode(false);
+    }
+  }, [song?._id, song?.content_type, loadCharacters]);
+
+  // Script Practice Mode - TTS reading
+  const speakLine = useCallback((lineIndex: number) => {
+    if (lineIndex < 0 || lineIndex >= lyrics.length) return;
+
+    const line = lyrics[lineIndex];
+    const character = characters.find(c => c._id === line.character_id);
+    const userCharacter = characters.find(c => c.is_user);
+
+    // Skip if this is the user's line
+    if (character && userCharacter && character._id === userCharacter._id) {
+      setIsTTSSpeaking(false);
+      return;
+    }
+
+    // Skip stage directions and non-dialogue
+    if (line.line_type === 'stage_direction' || !line.text.trim()) {
+      setIsTTSSpeaking(false);
+      return;
+    }
+
+    setIsTTSSpeaking(true);
+
+    // Determine voice type based on character
+    let voiceType: VoiceType = 'default-male';
+    if (character?.voice_id) {
+      voiceType = character.voice_id as VoiceType;
+    }
+
+    speak(line.text, {
+      voiceType,
+      onEnd: () => {
+        setIsTTSSpeaking(false);
+        // Auto-advance if enabled
+        if (scriptPracticeAutoAdvance && scriptPracticeActiveRef.current) {
+          setTimeout(() => {
+            if (scriptPracticeActiveRef.current && lineIndex < lyrics.length - 1) {
+              setScriptPracticeLineIndex(lineIndex + 1);
+            }
+          }, 800); // Pause between lines
+        }
+      },
+      onError: () => {
+        setIsTTSSpeaking(false);
+      },
+    });
+  }, [lyrics, characters, scriptPracticeAutoAdvance]);
+
+  // When script practice line changes, speak if it's not the user's line
+  useEffect(() => {
+    if (scriptPracticeMode && scriptPracticeActiveRef.current) {
+      const line = lyrics[scriptPracticeLineIndex];
+      if (line) {
+        const userCharacter = characters.find(c => c.is_user);
+        const lineCharacter = characters.find(c => c._id === line.character_id);
+
+        // If this line belongs to a character other than the user, speak it
+        if (lineCharacter && userCharacter && lineCharacter._id !== userCharacter._id) {
+          speakLine(scriptPracticeLineIndex);
+        }
+      }
+    }
+  }, [scriptPracticeLineIndex, scriptPracticeMode, speakLine, lyrics, characters]);
+
+  const startScriptPractice = () => {
+    setScriptPracticeMode(true);
+    scriptPracticeActiveRef.current = true;
+    setScriptPracticeLineIndex(0);
+  };
+
+  const stopScriptPractice = () => {
+    setScriptPracticeMode(false);
+    scriptPracticeActiveRef.current = false;
+    stopSpeaking();
+    setIsTTSSpeaking(false);
+  };
+
+  const nextScriptLine = () => {
+    if (scriptPracticeLineIndex < lyrics.length - 1) {
+      stopSpeaking();
+      setScriptPracticeLineIndex(prev => prev + 1);
+    }
+  };
+
+  const prevScriptLine = () => {
+    if (scriptPracticeLineIndex > 0) {
+      stopSpeaking();
+      setScriptPracticeLineIndex(prev => prev - 1);
+    }
+  };
+
+  // Cleanup TTS when component unmounts or song changes
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, [song?._id]);
 
   const handleSongSelect = async (selectedSong: Song) => {
     // Load lyrics for the selected song
@@ -1157,6 +1313,10 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
         line_number: afterIndex + 1,
         text: '',
         timestamp_ms: null,
+        character_id: null,
+        line_type: 'lyric' as LineType,
+        notes: null,
+        duration_seconds: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -1560,6 +1720,10 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
         line_number: editingLineIndex + 1,
         text: afterCursor,
         timestamp_ms: null,
+        character_id: null,
+        line_type: 'lyric' as LineType,
+        notes: null,
+        duration_seconds: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -1977,6 +2141,65 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
                   <span className="text-xs text-red-700 font-medium">Recording</span>
                 </div>
               )}
+
+              {/* Script Practice Mode Controls */}
+              {song?.content_type === 'script' && characters.length > 0 && (
+                <>
+                  <div className="w-px h-8 bg-slate-300 mx-1" />
+                  {!scriptPracticeMode ? (
+                    <button
+                      onClick={startScriptPractice}
+                      className="group flex items-center gap-2 px-3 py-2 bg-purple-100 hover:bg-purple-200 border border-purple-300 rounded-lg transition-all duration-300"
+                      title="Start Script Practice - AI reads other characters"
+                    >
+                      <span className="text-lg">🎭</span>
+                      <span className="text-sm font-medium text-purple-700">Practice Script</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-purple-100 border border-purple-300 rounded-lg">
+                      <button
+                        onClick={prevScriptLine}
+                        disabled={scriptPracticeLineIndex === 0}
+                        className="p-1 hover:bg-purple-200 rounded disabled:opacity-50"
+                        title="Previous Line"
+                      >
+                        <svg className="w-5 h-5 text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <span className="text-sm font-medium text-purple-700 min-w-[60px] text-center">
+                        {scriptPracticeLineIndex + 1} / {lyrics.length}
+                      </span>
+                      <button
+                        onClick={nextScriptLine}
+                        disabled={scriptPracticeLineIndex >= lyrics.length - 1}
+                        className="p-1 hover:bg-purple-200 rounded disabled:opacity-50"
+                        title="Next Line"
+                      >
+                        <svg className="w-5 h-5 text-purple-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      {isTTSSpeaking && (
+                        <span className="flex items-center gap-1 text-xs text-purple-600">
+                          <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
+                          Speaking
+                        </span>
+                      )}
+                      <button
+                        onClick={stopScriptPractice}
+                        className="p-1 hover:bg-red-200 rounded"
+                        title="Stop Practice"
+                      >
+                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* Export button with dropdown */}
               <div className="relative" ref={exportMenuRef}>
                 <button
@@ -2466,6 +2689,13 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
                 const isLoopEnd = sectionLoopEnd === index;
                 const isInLoop = isInSectionLoop(index);
 
+                // Script practice mode indicators
+                const isScriptPracticeActive = scriptPracticeMode && index === scriptPracticeLineIndex;
+                const lineCharacter = characters.find(c => c._id === line.character_id);
+                const userCharacter = characters.find(c => c.is_user);
+                const isUserLine = lineCharacter && userCharacter && lineCharacter._id === userCharacter._id;
+                const isStageDirection = line.line_type === 'stage_direction';
+
                 const longestLine = lyrics.reduce((max, l) => l.text.length > max ? l.text.length : max, 0);
                 const calculatedFontSize = autoScale
                   ? Math.min(96, Math.max(24, (isFullscreen ? window.innerWidth : 800) * 0.8 / longestLine))
@@ -2511,7 +2741,13 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
                     } ${
                       editMode && editingLineIndex !== index ? 'hover:bg-white/5 rounded-lg' : ''
                     } ${
-                      isSpotlightMode
+                      scriptPracticeMode
+                        ? isScriptPracticeActive
+                          ? 'opacity-100 scale-105'
+                          : index < scriptPracticeLineIndex
+                          ? 'opacity-30'
+                          : 'opacity-50'
+                        : isSpotlightMode
                         ? 'opacity-100 z-10'
                         : syncMode
                         ? isSyncTarget
@@ -2530,21 +2766,33 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
                       isLoopStart && loopEnabled ? 'border-t-2 border-t-orange-500/70 pt-1' : ''
                     } ${
                       isLoopEnd && loopEnabled ? 'border-b-2 border-b-orange-500/70 pb-1' : ''
+                    } ${
+                      isStageDirection ? 'italic opacity-60' : ''
                     }`}
                     style={{
                       fontSize: isSpotlightMode ? `${spotlightFontSize}px` : `${calculatedFontSize}px`,
-                      fontWeight: isActive || isSyncTarget ? 'bold' : 'normal',
-                      color: syncMode
+                      fontWeight: (isActive || isSyncTarget || isScriptPracticeActive) ? 'bold' : 'normal',
+                      color: scriptPracticeMode
+                        ? isScriptPracticeActive
+                          ? isUserLine
+                            ? '#22c55e' // Green for user's line
+                            : lineCharacter?.color || '#22d3ee' // Character color or cyan
+                          : inactiveTextColor
+                        : syncMode
                         ? isSyncTarget
                           ? '#22d3ee'
                           : isSyncDone
                           ? '#22c55e'
                           : inactiveTextColor
+                        : song?.content_type === 'script' && lineCharacter
+                        ? lineCharacter.color
                         : isActive
                         ? activeTextColor
                         : inactiveTextColor,
                       textShadow: isSpotlightMode
                         ? `0 0 20px ${activeTextColor}60`
+                        : isScriptPracticeActive
+                        ? `0 0 15px ${isUserLine ? '#22c55e' : (lineCharacter?.color || '#22d3ee')}50`
                         : isActive
                         ? `0 0 15px ${activeTextColor}50`
                         : isSyncTarget
@@ -2620,7 +2868,27 @@ export default function Teleprompter({ song, lyrics, onLyricsChange, onSelectSon
                               <span className="text-cyan-300 text-lg">▶</span>
                             </button>
                           )}
+                          {/* Character name prefix for scripts */}
+                          {song?.content_type === 'script' && lineCharacter && (
+                            <span
+                              className="font-bold mr-2"
+                              style={{ color: lineCharacter.color }}
+                            >
+                              {lineCharacter.name}:
+                            </span>
+                          )}
+                          {/* Stage direction indicator */}
+                          {isStageDirection && (
+                            <span className="text-slate-400 mr-1">[</span>
+                          )}
                           {line.text}
+                          {isStageDirection && (
+                            <span className="text-slate-400 ml-1">]</span>
+                          )}
+                          {/* User's line indicator in script practice */}
+                          {scriptPracticeMode && isScriptPracticeActive && isUserLine && (
+                            <span className="ml-2 text-green-400 text-sm animate-pulse">← Your line</span>
+                          )}
                           {/* Sync mode timing */}
                           {syncMode && isSyncDone && (
                             <span className="inline-flex items-center ml-3 gap-1">

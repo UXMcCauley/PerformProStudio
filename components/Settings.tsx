@@ -6,10 +6,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import SongImportModal from './SongImportModal';
 import BandSettingsPanel from './BandSettingsPanel';
 
+type GroupContentType = 'band' | 'production' | 'podcast' | 'organization';
+
 type Band = {
   _id: string;
   user_id: string;
   name: string;
+  content_type?: GroupContentType;
   role?: 'owner' | 'admin' | 'member';
   created_at: string;
   updated_at: string;
@@ -24,6 +27,61 @@ type TagConfig = {
   updated_at: string;
 };
 
+// Labels and icons for each content type group
+const GROUP_TYPE_CONFIG: Record<GroupContentType, {
+  label: string;
+  pluralLabel: string;
+  icon: string;
+  description: string;
+  itemLabel: string;
+  itemPluralLabel: string;
+  placeholder: string;
+  gradient: string;
+}> = {
+  band: {
+    label: 'Band',
+    pluralLabel: 'Bands',
+    icon: '🎵',
+    description: 'Manage your bands and collaborate with other musicians',
+    itemLabel: 'Album',
+    itemPluralLabel: 'Albums',
+    placeholder: 'Create new band...',
+    gradient: 'from-purple-500 to-pink-500',
+  },
+  production: {
+    label: 'Production',
+    pluralLabel: 'Productions',
+    icon: '🎭',
+    description: 'Manage theater companies and production teams for scripts',
+    itemLabel: 'Show/Play',
+    itemPluralLabel: 'Shows/Plays',
+    placeholder: 'Create new production team...',
+    gradient: 'from-amber-500 to-orange-500',
+  },
+  podcast: {
+    label: 'Podcast',
+    pluralLabel: 'Podcasts',
+    icon: '🎙️',
+    description: 'Manage your podcast shows and seasons',
+    itemLabel: 'Season',
+    itemPluralLabel: 'Seasons',
+    placeholder: 'Create new podcast show...',
+    gradient: 'from-blue-500 to-cyan-500',
+  },
+  organization: {
+    label: 'Organization',
+    pluralLabel: 'Organizations',
+    icon: '📢',
+    description: 'Manage organizations for speeches and presentations',
+    itemLabel: 'Event/Series',
+    itemPluralLabel: 'Events/Series',
+    placeholder: 'Create new organization...',
+    gradient: 'from-green-500 to-emerald-500',
+  },
+};
+
+type SectionType = 'personal' | 'bands' | 'productions' | 'podcasts' | 'organizations' | 'tags' | 'integrations' | 'theme';
+
 interface Props {
   onBack?: () => void;
   showBackButton?: boolean;
@@ -32,73 +90,83 @@ interface Props {
 export default function Settings({ onBack, showBackButton = false }: Props) {
   const { theme, setTheme } = useTheme();
   const { user, signOut } = useAuth();
-  const [activeSection, setActiveSection] = useState<'personal' | 'bands' | 'tags' | 'integrations' | 'theme'>('personal');
+  const [activeSection, setActiveSection] = useState<SectionType>('personal');
   const [name, setName] = useState('User Name');
   const [email, setEmail] = useState('user@example.com');
   const [avatar, setAvatar] = useState<string | null>(null);
-  const [bands, setBands] = useState<Band[]>([]);
+  const [allGroups, setAllGroups] = useState<Band[]>([]);
   const [tagConfigs, setTagConfigs] = useState<TagConfig[]>([]);
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('purple');
   const [showImportModal, setShowImportModal] = useState(false);
-  const [newBand, setNewBand] = useState('');
+  const [newGroupName, setNewGroupName] = useState('');
   const [hasPersonalChanges, setHasPersonalChanges] = useState(false);
   const [originalPersonalData, setOriginalPersonalData] = useState({ name: 'User Name', email: 'user@example.com', avatar: null as string | null });
   const [selectedBand, setSelectedBand] = useState<Band | null>(null);
+
+  // Filter groups by content type
+  const bands = allGroups.filter(g => !g.content_type || g.content_type === 'band');
+  const productions = allGroups.filter(g => g.content_type === 'production');
+  const podcasts = allGroups.filter(g => g.content_type === 'podcast');
+  const organizations = allGroups.filter(g => g.content_type === 'organization');
 
   useEffect(() => {
     const hasChanges = name !== originalPersonalData.name || email !== originalPersonalData.email || avatar !== originalPersonalData.avatar;
     setHasPersonalChanges(hasChanges);
   }, [name, email, avatar, originalPersonalData]);
 
-  const handleAddBand = async () => {
+  const handleAddGroup = async (contentType: GroupContentType) => {
     if (!user?.id) {
-      alert('Please log in to add bands');
+      alert(`Please log in to add ${GROUP_TYPE_CONFIG[contentType].pluralLabel.toLowerCase()}`);
       return;
     }
 
-    if (newBand.trim() && !bands.some(b => b.name === newBand.trim())) {
+    const existingGroups = contentType === 'band' ? bands :
+                           contentType === 'production' ? productions :
+                           contentType === 'podcast' ? podcasts : organizations;
+
+    if (newGroupName.trim() && !existingGroups.some(g => g.name === newGroupName.trim())) {
       try {
         const response = await fetch('/api/bands', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newBand.trim() }),
+          body: JSON.stringify({ name: newGroupName.trim(), content_type: contentType }),
         });
 
         if (response.ok) {
-          const newBandData = await response.json();
-          setBands([...bands, newBandData]);
-          setNewBand('');
+          const newGroupData = await response.json();
+          setAllGroups([...allGroups, newGroupData]);
+          setNewGroupName('');
         } else {
-          alert('Error creating band. Please try again.');
+          alert(`Error creating ${GROUP_TYPE_CONFIG[contentType].label.toLowerCase()}. Please try again.`);
         }
       } catch (error) {
-        console.error('Error creating band:', error);
-        alert('Error creating band. Please try again.');
+        console.error(`Error creating ${contentType}:`, error);
+        alert(`Error creating ${GROUP_TYPE_CONFIG[contentType].label.toLowerCase()}. Please try again.`);
       }
     }
   };
 
-  const handleRemoveBand = async (bandId: string) => {
+  const handleRemoveGroup = async (groupId: string, contentType: GroupContentType) => {
     if (!user?.id) {
-      alert('Please log in to remove bands');
+      alert(`Please log in to remove ${GROUP_TYPE_CONFIG[contentType].pluralLabel.toLowerCase()}`);
       return;
     }
 
     try {
-      const response = await fetch(`/api/bands?id=${bandId}`, {
+      const response = await fetch(`/api/bands?id=${groupId}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
-        setBands(bands.filter(band => band._id !== bandId));
+        setAllGroups(allGroups.filter(g => g._id !== groupId));
       } else {
-        console.error('Error deleting band');
-        alert('Error deleting band. Please try again.');
+        console.error(`Error deleting ${contentType}`);
+        alert(`Error deleting ${GROUP_TYPE_CONFIG[contentType].label.toLowerCase()}. Please try again.`);
       }
     } catch (error) {
-      console.error('Error deleting band:', error);
-      alert('Error deleting band. Please try again.');
+      console.error(`Error deleting ${contentType}:`, error);
+      alert(`Error deleting ${GROUP_TYPE_CONFIG[contentType].label.toLowerCase()}. Please try again.`);
     }
   };
 
@@ -177,11 +245,11 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
             }
           }
 
-          // Load bands
+          // Load all groups (bands, productions, podcasts, organizations)
           const bandsResponse = await fetch('/api/bands');
           if (bandsResponse.ok) {
-            const userBands = await bandsResponse.json();
-            setBands(userBands);
+            const userGroups = await bandsResponse.json();
+            setAllGroups(userGroups);
           }
 
           // Load tag configs
@@ -287,16 +355,51 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
                 Personal Info
               </a>
             </li>
+            <li className="menu-title">
+              <span>Content Groups</span>
+            </li>
             <li>
               <a
                 onClick={() => setActiveSection('bands')}
                 className={activeSection === 'bands' ? 'active' : ''}
               >
-                <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                </svg>
+                <span className="text-lg">🎵</span>
                 Bands
+                {bands.length > 0 && <span className="badge badge-sm">{bands.length}</span>}
               </a>
+            </li>
+            <li>
+              <a
+                onClick={() => setActiveSection('productions')}
+                className={activeSection === 'productions' ? 'active' : ''}
+              >
+                <span className="text-lg">🎭</span>
+                Productions
+                {productions.length > 0 && <span className="badge badge-sm">{productions.length}</span>}
+              </a>
+            </li>
+            <li>
+              <a
+                onClick={() => setActiveSection('podcasts')}
+                className={activeSection === 'podcasts' ? 'active' : ''}
+              >
+                <span className="text-lg">🎙️</span>
+                Podcasts
+                {podcasts.length > 0 && <span className="badge badge-sm">{podcasts.length}</span>}
+              </a>
+            </li>
+            <li>
+              <a
+                onClick={() => setActiveSection('organizations')}
+                className={activeSection === 'organizations' ? 'active' : ''}
+              >
+                <span className="text-lg">📢</span>
+                Organizations
+                {organizations.length > 0 && <span className="badge badge-sm">{organizations.length}</span>}
+              </a>
+            </li>
+            <li className="menu-title">
+              <span>Preferences</span>
             </li>
             <li>
               <a
@@ -427,91 +530,105 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
             </div>
           )}
 
-          {activeSection === 'bands' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-base-content mb-4">Your Bands</h3>
-                <p className="text-sm text-base-content/60 mb-4">
-                  Manage your bands and collaborate with other musicians
-                </p>
+          {/* Render group sections for each content type */}
+          {(['bands', 'productions', 'podcasts', 'organizations'] as const).map(section => {
+            const contentType: GroupContentType = section === 'bands' ? 'band' :
+                                                   section === 'productions' ? 'production' :
+                                                   section === 'podcasts' ? 'podcast' : 'organization';
+            const config = GROUP_TYPE_CONFIG[contentType];
+            const groupList = section === 'bands' ? bands :
+                              section === 'productions' ? productions :
+                              section === 'podcasts' ? podcasts : organizations;
 
-                <div className="space-y-3 mb-6">
-                  {bands.length === 0 ? (
-                    <div className="text-center py-8 text-base-content/60">
-                      <p>No bands yet. Add your first band below!</p>
+            return activeSection === section && (
+              <div key={section} className="space-y-6">
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-3xl">{config.icon}</span>
+                    <div>
+                      <h3 className="text-lg font-semibold text-base-content">Your {config.pluralLabel}</h3>
+                      <p className="text-sm text-base-content/60">{config.description}</p>
                     </div>
-                  ) : (
-                    bands.map(band => (
-                      <div
-                        key={band._id}
-                        className="flex items-center justify-between p-3 bg-base-200 border border-base-300 rounded-lg transition-colors hover:bg-base-300/50"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                            </svg>
+                  </div>
+
+                  <div className="space-y-3 mb-6">
+                    {groupList.length === 0 ? (
+                      <div className="text-center py-8 text-base-content/60 bg-base-200 rounded-lg">
+                        <span className="text-4xl mb-2 block">{config.icon}</span>
+                        <p>No {config.pluralLabel.toLowerCase()} yet. Create your first one below!</p>
+                      </div>
+                    ) : (
+                      groupList.map(group => (
+                        <div
+                          key={group._id}
+                          className="flex items-center justify-between p-3 bg-base-200 border border-base-300 rounded-lg transition-colors hover:bg-base-300/50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 bg-gradient-to-br ${config.gradient} rounded-lg flex items-center justify-center text-white text-lg`}>
+                              {config.icon}
+                            </div>
+                            <div>
+                              <span className="font-medium text-base-content">{group.name}</span>
+                              {group.role && (
+                                <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                                  group.role === 'owner' ? 'bg-amber-500 text-white' :
+                                  group.role === 'admin' ? 'bg-purple-500 text-white' :
+                                  'bg-base-300 text-base-content'
+                                }`}>
+                                  {group.role}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <span className="font-medium text-base-content">{band.name}</span>
-                            {band.role && (
-                              <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                                band.role === 'owner' ? 'bg-amber-500 text-white' :
-                                band.role === 'admin' ? 'bg-purple-500 text-white' :
-                                'bg-base-300 text-base-content'
-                              }`}>
-                                {band.role}
-                              </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedBand(group)}
+                              className="btn btn-ghost btn-sm"
+                              title={`${config.label} settings`}
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.204-.107-.397.165-.71.505-.78.929l-.15.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                            </button>
+                            {group.role === 'owner' && (
+                              <button
+                                onClick={() => handleRemoveGroup(group._id, contentType)}
+                                className="btn btn-ghost btn-sm text-error"
+                                title={`Delete ${config.label.toLowerCase()}`}
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setSelectedBand(band)}
-                            className="btn btn-ghost btn-sm"
-                            title="Band settings"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                            </svg>
-                          </button>
-                          {band.role === 'owner' && (
-                            <button
-                              onClick={() => handleRemoveBand(band._id)}
-                              className="btn btn-ghost btn-sm text-error"
-                              title="Delete band"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                      ))
+                    )}
+                  </div>
 
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newBand}
-                    onChange={e => setNewBand(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleAddBand()}
-                    placeholder="Create new band..."
-                    className="flex-1 px-4 py-2 border border-base-300 rounded-lg focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
-                  />
-                  <button
-                    onClick={handleAddBand}
-                    disabled={!newBand.trim()}
-                    className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Create Band
-                  </button>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newGroupName}
+                      onChange={e => setNewGroupName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleAddGroup(contentType)}
+                      placeholder={config.placeholder}
+                      className="flex-1 px-4 py-2 border border-base-300 rounded-lg focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+                    />
+                    <button
+                      onClick={() => handleAddGroup(contentType)}
+                      disabled={!newGroupName.trim()}
+                      className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Create {config.label}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })}
 
           {activeSection === 'tags' && (
             <div className="space-y-6">
@@ -746,7 +863,7 @@ export default function Settings({ onBack, showBackButton = false }: Props) {
           band={selectedBand}
           onClose={() => setSelectedBand(null)}
           onBandDeleted={() => {
-            setBands(bands.filter(b => b._id !== selectedBand._id));
+            setAllGroups(allGroups.filter(g => g._id !== selectedBand._id));
             setSelectedBand(null);
           }}
         />

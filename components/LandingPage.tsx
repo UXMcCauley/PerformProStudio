@@ -6,8 +6,74 @@ interface LandingPageProps {
   onGetStarted: () => void;
 }
 
+type ContentTypeKey = 'lyrics' | 'script' | 'podcast' | 'speech';
+
 export default function LandingPage({ onGetStarted }: LandingPageProps) {
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
+  const [activeContentType, setActiveContentType] = useState<ContentTypeKey>('lyrics');
+
+  // Content type showcase data
+  const contentTypes: Record<ContentTypeKey, {
+    icon: string;
+    title: string;
+    subtitle: string;
+    description: string;
+    features: string[];
+    demoLines: { character?: string; role?: string; color?: string; text: string; type?: string }[];
+  }> = {
+    lyrics: {
+      icon: '🎵',
+      title: 'Song Lyrics',
+      subtitle: 'For Musicians & Performers',
+      description: 'Professional teleprompter for live performances. Import from Spotify, Apple Music, or paste lyrics directly.',
+      features: ['Auto-sync with audio', 'Band collaboration', 'Album organization', 'Performance metrics'],
+      demoLines: [
+        { text: 'In the depths of night, I find my way', type: 'lyric' },
+        { text: 'Through the shadows, into the day', type: 'lyric' },
+        { text: 'Every moment, every beat', type: 'lyric' },
+        { text: 'Brings me closer to complete', type: 'lyric' },
+      ],
+    },
+    script: {
+      icon: '🎭',
+      title: 'Scripts & Screenplays',
+      subtitle: 'For Actors & Theater',
+      description: 'Practice lines with AI reading other characters. Color-coded roles for directors, actors, and crew.',
+      features: ['AI voice for other parts', 'Character color-coding', 'Director cues', 'Production organization'],
+      demoLines: [
+        { character: 'ROMEO', role: 'Actor', color: '#a855f7', text: 'But soft, what light through yonder window breaks?', type: 'dialogue' },
+        { text: '[Romeo gazes up at the balcony]', type: 'stage_direction' },
+        { character: 'JULIET', role: 'Actor', color: '#ec4899', text: 'O Romeo, Romeo! Wherefore art thou Romeo?', type: 'dialogue' },
+        { character: 'DIRECTOR', role: 'Director', color: '#f97316', text: 'CUE: Spotlight on balcony', type: 'cue' },
+      ],
+    },
+    podcast: {
+      icon: '🎙️',
+      title: 'Podcast Notes',
+      subtitle: 'For Hosts & Creators',
+      description: 'Organize talking points, interview questions, and segment headers. Keep your show on track.',
+      features: ['Host & guest roles', 'Season organization', 'Episode numbering', 'Segment markers'],
+      demoLines: [
+        { text: '=== INTRO SEGMENT ===', type: 'segment_header' },
+        { character: 'HOST', role: 'Host', color: '#3b82f6', text: 'Welcome back to Tech Talk! Today we have a special guest...', type: 'talking_point' },
+        { character: 'GUEST', role: 'Guest', color: '#10b981', text: 'Thanks for having me! Excited to discuss AI trends.', type: 'talking_point' },
+        { text: '? Ask about their journey into tech', type: 'question' },
+      ],
+    },
+    speech: {
+      icon: '📢',
+      title: 'Speeches & Presentations',
+      subtitle: 'For Public Speakers',
+      description: 'Nail your keynotes, TED talks, and lectures. Emphasis markers and timing cues included.',
+      features: ['Timing targets', 'Emphasis markers', 'Organization grouping', 'Event/series tracking'],
+      demoLines: [
+        { text: '[PAUSE - Let that sink in]', type: 'pause' },
+        { text: '** The future is not something that happens TO us **', type: 'emphasis' },
+        { text: 'It is something we CREATE, together, every single day.', type: 'talking_point' },
+        { text: '[CUE: Advance to next slide]', type: 'cue' },
+      ],
+    },
+  };
 
   const features = [
     {
@@ -68,23 +134,39 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
 
   return (
     <div className="landing-page">
+      {/* Logo Header */}
+      <header className="landing-header">
+        <div className="landing-logo">
+          <div className="logo-icon">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
+            </svg>
+            <div className="logo-dot"></div>
+          </div>
+          <div className="logo-text">
+            <span className="logo-name">PerformPro</span>
+            <span className="logo-studio">Studio</span>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-content">
           <div className="hero-badge">
             <span className="badge-dot"></span>
-            <span>Built for Musicians</span>
+            <span>Built for Performers</span>
           </div>
 
           <h1 className="hero-title">
-            Your Lyrics,
+            Your Content,
             <br />
             <span className="hero-title-gradient">Perfectly Prompted</span>
           </h1>
 
           <p className="hero-description">
-            Professional teleprompter designed for musicians, performers, and studios.
-            AI-powered formatting, cloud sync, and customizable display for seamless performances.
+            Professional teleprompter for musicians, actors, podcasters, and public speakers.
+            AI-powered formatting, character roles, and voice synthesis for seamless performances.
           </p>
 
           <div className="hero-actions">
@@ -110,17 +192,17 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           <div className="hero-stats">
             <div className="stat-item">
               <div className="stat-value">10K+</div>
-              <div className="stat-label">Musicians</div>
+              <div className="stat-label">Performers</div>
             </div>
             <div className="stat-divider"></div>
             <div className="stat-item">
               <div className="stat-value">50K+</div>
-              <div className="stat-label">Songs</div>
+              <div className="stat-label">Projects</div>
             </div>
             <div className="stat-divider"></div>
             <div className="stat-item">
               <div className="stat-value">100K+</div>
-              <div className="stat-label">Performances</div>
+              <div className="stat-label">Rehearsals</div>
             </div>
           </div>
         </div>
@@ -133,7 +215,7 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
                 <span></span>
                 <span></span>
               </div>
-              <span className="visual-title">teleprompter.app</span>
+              <span className="visual-title">performpro.studio</span>
             </div>
             <div className="visual-content">
               <div className="lyric-line">
@@ -186,12 +268,137 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
         </div>
       </section>
 
+      {/* Content Types Showcase Section */}
+      <section className="content-types-section">
+        <div className="section-header">
+          <h2 className="section-title">One Platform, Four Specialties</h2>
+          <p className="section-description">
+            Tailored experience for every type of performer
+          </p>
+        </div>
+
+        {/* Content Type Tabs */}
+        <div className="content-type-tabs">
+          {(Object.keys(contentTypes) as ContentTypeKey[]).map((key) => (
+            <button
+              key={key}
+              onClick={() => setActiveContentType(key)}
+              className={`content-type-tab ${activeContentType === key ? 'active' : ''}`}
+            >
+              <span className="tab-icon">{contentTypes[key].icon}</span>
+              <span className="tab-label">{contentTypes[key].title}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Active Content Type Display */}
+        <div className="content-type-showcase">
+          <div className="showcase-info">
+            <div className="showcase-header">
+              <span className="showcase-icon">{contentTypes[activeContentType].icon}</span>
+              <div>
+                <h3 className="showcase-title">{contentTypes[activeContentType].title}</h3>
+                <p className="showcase-subtitle">{contentTypes[activeContentType].subtitle}</p>
+              </div>
+            </div>
+            <p className="showcase-description">{contentTypes[activeContentType].description}</p>
+            <ul className="showcase-features">
+              {contentTypes[activeContentType].features.map((feature, idx) => (
+                <li key={idx}>
+                  <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <button onClick={onGetStarted} className="btn-showcase">
+              Try {contentTypes[activeContentType].title}
+              <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Demo Preview */}
+          <div className="showcase-demo">
+            <div className="demo-card">
+              <div className="demo-header">
+                <div className="demo-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <span className="demo-title">{contentTypes[activeContentType].title} Preview</span>
+              </div>
+              <div className="demo-content">
+                {contentTypes[activeContentType].demoLines.map((line, idx) => (
+                  <div
+                    key={idx}
+                    className={`demo-line ${line.type || 'default'} ${idx === 1 ? 'active' : ''}`}
+                  >
+                    {line.character && (
+                      <span className="line-character" style={{ color: line.color }}>
+                        {line.character}
+                        {line.role && <span className="character-role">{line.role}</span>}
+                      </span>
+                    )}
+                    <span className={`line-text ${line.type || ''}`}>{line.text}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="demo-glow"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* AI Voice Feature Section */}
+      <section className="ai-voice-section">
+        <div className="ai-voice-content">
+          <div className="ai-voice-badge">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+            </svg>
+            <span>AI-Powered Practice</span>
+          </div>
+          <h2 className="ai-voice-title">Let AI Read Your Scene Partners</h2>
+          <p className="ai-voice-description">
+            For actors practicing scripts, our text-to-speech technology reads other characters&apos; lines
+            so you can focus on your part. Assign different voices to directors, narrators, and fellow actors.
+          </p>
+          <div className="ai-voice-features">
+            <div className="voice-feature">
+              <div className="voice-feature-icon" style={{ background: 'linear-gradient(135deg, #a855f7, #ec4899)' }}>🎭</div>
+              <div>
+                <h4>Character Voices</h4>
+                <p>Distinct voices for each character in your script</p>
+              </div>
+            </div>
+            <div className="voice-feature">
+              <div className="voice-feature-icon" style={{ background: 'linear-gradient(135deg, #3b82f6, #06b6d4)' }}>🎬</div>
+              <div>
+                <h4>Role-Based Coloring</h4>
+                <p>Directors, actors, and crew each get unique colors</p>
+              </div>
+            </div>
+            <div className="voice-feature">
+              <div className="voice-feature-icon" style={{ background: 'linear-gradient(135deg, #10b981, #84cc16)' }}>⏯️</div>
+              <div>
+                <h4>Practice Mode</h4>
+                <p>AI reads, pauses for your lines, then continues</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="cta-section">
         <div className="cta-content">
           <h2 className="cta-title">Ready to transform your performances?</h2>
           <p className="cta-description">
-            Join thousands of musicians who trust IntelliPrompter for their live shows
+            Join thousands of performers who trust PerformPro Studio for their rehearsals and live shows
           </p>
           <button
             onClick={onGetStarted}

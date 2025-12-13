@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import AudioUploader from './AudioUploader';
 
+type ContentType = 'lyrics' | 'script' | 'podcast' | 'speech';
+
 type Song = {
   _id: string;
   title: string;
@@ -13,14 +15,23 @@ type Song = {
   tags: string[];
   soundcloud_url: string | null;
   instrumental_url: string | null;
+  artwork_url: string | null;
   completed: boolean;
   band_id: string | null;
   album_id: string | null;
   folder_id: string | null;
   user_id: string;
+  content_type: ContentType;
+  my_character_id: string | null;
+  episode_number: number | null;
+  duration_target_minutes: number | null;
   created_at: string;
   updated_at: string;
 };
+
+type LineType = 'lyric' | 'dialogue' | 'stage_direction' | 'talking_point' | 'question' | 'segment_header' | 'cue' | 'emphasis' | 'pause';
+
+type CharacterRole = 'performer' | 'director' | 'narrator' | 'crew' | 'host' | 'guest';
 
 type LyricLine = {
   _id: string;
@@ -28,16 +39,44 @@ type LyricLine = {
   line_number: number;
   text: string;
   timestamp_ms: number | null;
+  character_id: string | null;
+  line_type: LineType;
+  notes: string | null;
+  duration_seconds: number | null;
   created_at: string;
   updated_at: string;
 };
+
+type Character = {
+  _id: string;
+  song_id: string;
+  name: string;
+  color: string;
+  voice_id: string | null;
+  is_user: boolean;
+  role: CharacterRole;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type GroupContentType = 'band' | 'production' | 'podcast' | 'organization';
 
 type Band = {
   _id: string;
   user_id: string;
   name: string;
+  content_type?: GroupContentType;
   created_at: string;
   updated_at: string;
+};
+
+// Map song content type to group content type
+const CONTENT_TYPE_TO_GROUP: Record<ContentType, GroupContentType> = {
+  lyrics: 'band',
+  script: 'production',
+  podcast: 'podcast',
+  speech: 'organization',
 };
 
 type Album = {
@@ -78,9 +117,88 @@ interface Props {
   onSongChange: (song: Song | null) => void;
   onBack?: () => void;
   showBackButton?: boolean;
+  initialContentType?: ContentType;
 }
 
-export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange, onBack, showBackButton = false }: Props) {
+// Content type labels and field names
+const CONTENT_TYPE_LABELS: Record<ContentType, {
+  singular: string;
+  plural: string;
+  lineLabel: string;
+  bandLabel: string;
+  bandPlaceholder: string;
+  bandHint: string;
+  albumLabel: string;
+  albumPlaceholder: string;
+  folderLabel: string;
+}> = {
+  lyrics: {
+    singular: 'Song',
+    plural: 'Songs',
+    lineLabel: 'Lyrics',
+    bandLabel: 'Band',
+    bandPlaceholder: 'Select a band',
+    bandHint: 'Create a band in Settings first',
+    albumLabel: 'Album',
+    albumPlaceholder: 'No Album',
+    folderLabel: 'Folder',
+  },
+  script: {
+    singular: 'Script',
+    plural: 'Scripts',
+    lineLabel: 'Lines',
+    bandLabel: 'Cast / Production Team',
+    bandPlaceholder: 'Select a production team',
+    bandHint: 'Create a production team in Settings first',
+    albumLabel: 'Production',
+    albumPlaceholder: 'No Production',
+    folderLabel: 'Project',
+  },
+  podcast: {
+    singular: 'Episode',
+    plural: 'Episodes',
+    lineLabel: 'Notes',
+    bandLabel: 'Podcast Show',
+    bandPlaceholder: 'Select a podcast show',
+    bandHint: 'Create a podcast show in Settings first',
+    albumLabel: 'Season',
+    albumPlaceholder: 'No Season',
+    folderLabel: 'Category',
+  },
+  speech: {
+    singular: 'Speech',
+    plural: 'Speeches',
+    lineLabel: 'Content',
+    bandLabel: 'Organization',
+    bandPlaceholder: 'Select an organization',
+    bandHint: 'Create an organization in Settings first',
+    albumLabel: 'Event / Series',
+    albumPlaceholder: 'No Event',
+    folderLabel: 'Topic',
+  },
+};
+
+// Role options for different content types
+const ROLE_OPTIONS: Record<ContentType, { roles: CharacterRole[]; labels: Record<CharacterRole, string> }> = {
+  lyrics: {
+    roles: ['performer'],
+    labels: { performer: 'Performer', director: 'Director', narrator: 'Narrator', crew: 'Crew', host: 'Host', guest: 'Guest' },
+  },
+  script: {
+    roles: ['performer', 'director', 'narrator', 'crew'],
+    labels: { performer: 'Actor', director: 'Director', narrator: 'Narrator', crew: 'Crew/Stage', host: 'Host', guest: 'Guest' },
+  },
+  podcast: {
+    roles: ['host', 'guest', 'narrator'],
+    labels: { performer: 'Speaker', director: 'Producer', narrator: 'Narrator', crew: 'Crew', host: 'Host', guest: 'Guest' },
+  },
+  speech: {
+    roles: ['performer', 'narrator'],
+    labels: { performer: 'Speaker', director: 'Coach', narrator: 'Narrator', crew: 'Support', host: 'Host', guest: 'Guest' },
+  },
+};
+
+export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange, onBack, showBackButton = false, initialContentType = 'lyrics' }: Props) {
   const { user } = useAuth();
   const [title, setTitle] = useState<string>('');
   const [selectedBandId, setSelectedBandId] = useState<string>('');  const [availableBands, setAvailableBands] = useState<Band[]>([]);
@@ -144,22 +262,43 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
   // AI Analysis state
   const [analyzingLyrics, setAnalyzingLyrics] = useState(false);
 
+  // Content type state
+  const [contentType, setContentType] = useState<ContentType>(initialContentType);
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [showCharacterModal, setShowCharacterModal] = useState(false);
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
+  const [newCharacterName, setNewCharacterName] = useState('');
+  const [newCharacterRole, setNewCharacterRole] = useState<CharacterRole>('performer');
+  const [myCharacterId, setMyCharacterId] = useState<string | null>(null);
+
+  // Podcast/Speech specific
+  const [episodeNumber, setEpisodeNumber] = useState<number | null>(null);
+  const [durationTarget, setDurationTarget] = useState<number | null>(null);
+
   const defaultTags = ['confident', 'needs practice'];
   const tagColors = ['purple', 'blue', 'green', 'red', 'orange', 'pink', 'cyan', 'yellow'];
 
-  // Load bands and tag configs on mount
+  // Load bands and tag configs on mount and when content type changes
   useEffect(() => {
     loadBands();
     loadTagConfigs();
-  }, [user]);
+  }, [user, contentType]);
 
   const loadBands = async () => {
     if (user?.id) {
       try {
-        const response = await fetch('/api/bands');
+        // Filter bands by the corresponding group content type
+        const groupType = CONTENT_TYPE_TO_GROUP[contentType];
+        const response = await fetch(`/api/bands?content_type=${groupType}`);
         if (response.ok) {
           const bands = await response.json();
           setAvailableBands(bands);
+          // Clear selected band if it's not in the new list (e.g., content type changed)
+          if (selectedBandId && !bands.some((b: Band) => b._id === selectedBandId)) {
+            setSelectedBandId('');
+            setAlbum('');
+            setFolder('');
+          }
         }
       } catch (error) {
         console.error('Error loading bands:', error);
@@ -312,6 +451,115 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     }
   };
 
+  // Load characters when song changes
+  const loadCharacters = async (songId: string) => {
+    try {
+      const response = await fetch(`/api/characters?songId=${songId}`);
+      if (response.ok) {
+        const chars = await response.json();
+        setCharacters(chars);
+      }
+    } catch (error) {
+      console.error('Error loading characters:', error);
+    }
+  };
+
+  // Character management functions
+  const handleSaveCharacter = async () => {
+    if (!song || !newCharacterName.trim()) return;
+
+    try {
+      if (editingCharacter) {
+        // Update existing character
+        const response = await fetch('/api/characters', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editingCharacter._id,
+            name: newCharacterName.trim(),
+            role: newCharacterRole,
+          }),
+        });
+
+        if (response.ok) {
+          const updated = await response.json();
+          setCharacters(prev => prev.map(c => c._id === updated._id ? updated : c));
+        }
+      } else {
+        // Create new character
+        const response = await fetch('/api/characters', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            song_id: song._id,
+            name: newCharacterName.trim(),
+            role: newCharacterRole,
+          }),
+        });
+
+        if (response.ok) {
+          const newChar = await response.json();
+          setCharacters(prev => [...prev, newChar]);
+        }
+      }
+
+      setShowCharacterModal(false);
+      setEditingCharacter(null);
+      setNewCharacterName('');
+      setNewCharacterRole('performer');
+    } catch (error) {
+      console.error('Error saving character:', error);
+      alert('Failed to save character');
+    }
+  };
+
+  const handleDeleteCharacter = async (characterId: string) => {
+    if (!confirm('Delete this character? Lines assigned to them will become unassigned.')) return;
+
+    try {
+      const response = await fetch(`/api/characters?id=${characterId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        setCharacters(prev => prev.filter(c => c._id !== characterId));
+        setShowCharacterModal(false);
+        setEditingCharacter(null);
+      }
+    } catch (error) {
+      console.error('Error deleting character:', error);
+      alert('Failed to delete character');
+    }
+  };
+
+  const handleSetUserCharacter = async (characterId: string) => {
+    try {
+      const response = await fetch('/api/characters', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: characterId,
+          is_user: true,
+        }),
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        // Update all characters - the one that is now "user" and clear is_user from others
+        setCharacters(prev => prev.map(c => ({
+          ...c,
+          is_user: c._id === characterId,
+        })));
+        setMyCharacterId(characterId);
+        setShowCharacterModal(false);
+        setEditingCharacter(null);
+      }
+    } catch (error) {
+      console.error('Error setting user character:', error);
+      alert('Failed to set character');
+    }
+  };
+
   useEffect(() => {
     if (song) {
       const data = {
@@ -334,6 +582,19 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       setSoundcloudUrl(data.soundcloudUrl);
       setInstrumentalUrl(data.instrumentalUrl);
       setOriginalData(data);
+
+      // Set content type fields
+      setContentType(song.content_type || 'lyrics');
+      setEpisodeNumber(song.episode_number || null);
+      setDurationTarget(song.duration_target_minutes || null);
+      setMyCharacterId(song.my_character_id || null);
+
+      // Load characters for scripts
+      if (song.content_type === 'script') {
+        loadCharacters(song._id);
+      } else {
+        setCharacters([]);
+      }
     } else {
       const data = {
         title: '',
@@ -355,6 +616,13 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       setSoundcloudUrl(data.soundcloudUrl);
       setInstrumentalUrl(data.instrumentalUrl);
       setOriginalData(data);
+
+      // Reset content type fields for new item
+      setContentType(initialContentType);
+      setEpisodeNumber(null);
+      setDurationTarget(null);
+      setMyCharacterId(null);
+      setCharacters([]);
     }
 
     const lyricsText = lyrics.length > 0 ? lyrics.map(l => l.text).join('\n') : '';
@@ -364,7 +632,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     setLyricsCollapsed(false);
 
     setHasChanges(false);
-  }, [song?._id]); // Only reset when song ID changes, not on every lyrics update
+  }, [song?._id, initialContentType]); // Only reset when song ID changes, not on every lyrics update
 
   // Track changes
   useEffect(() => {
@@ -591,6 +859,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
         line_number: index,
         text,
         timestamp_ms: matchedTimestamp ?? lineByIndex?.timestamp_ms ?? null,
+        character_id: null,
+        line_type: 'lyric' as LineType,
+        notes: null,
+        duration_seconds: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -637,7 +909,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
 
       const songData = {
         title,
-        artist: selectedBand.name,
+        artist: contentType === 'lyrics' ? selectedBand.name : '',
         album: selectedAlbum?.name || null,
         folder: selectedFolder?.name || null,
         band_id: selectedBandId,
@@ -647,6 +919,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
         tags,
         soundcloud_url: soundcloudUrl || null,
         instrumental_url: instrumentalUrl || null,
+        content_type: contentType,
+        my_character_id: myCharacterId,
+        episode_number: episodeNumber,
+        duration_target_minutes: durationTarget,
       };
 
       if (song) {
@@ -689,6 +965,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
         line_number: index,
         text: line.text,
         timestamp_ms: line.timestamp_ms,
+        character_id: line.character_id || null,
+        line_type: line.line_type || 'lyric',
+        notes: line.notes || null,
+        duration_seconds: line.duration_seconds || null,
       }));
 
       const lyricsResponse = await fetch('/api/lyrics', {
@@ -735,6 +1015,20 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
     setEditedLineIndices(prev => new Set(prev).add(index));
   };
 
+  const updateLineType = (index: number, newType: LineType) => {
+    const updatedLyrics = [...lyrics];
+    updatedLyrics[index] = { ...updatedLyrics[index], line_type: newType };
+    onLyricsChange(updatedLyrics);
+    setEditedLineIndices(prev => new Set(prev).add(index));
+  };
+
+  const updateLineCharacter = (index: number, characterId: string | null) => {
+    const updatedLyrics = [...lyrics];
+    updatedLyrics[index] = { ...updatedLyrics[index], character_id: characterId };
+    onLyricsChange(updatedLyrics);
+    setEditedLineIndices(prev => new Set(prev).add(index));
+  };
+
   const deleteLyricLine = (index: number) => {
     const updatedLyrics = lyrics.filter((_, i) => i !== index);
     onLyricsChange(updatedLyrics);
@@ -747,6 +1041,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       line_number: index + 1,
       text: '',
       timestamp_ms: null,
+      character_id: null,
+      line_type: 'lyric' as LineType,
+      notes: null,
+      duration_seconds: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -871,6 +1169,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
         line_number: index,
         text: timedLine.text,
         timestamp_ms: timedLine.startMs,
+        character_id: null,
+        line_type: 'lyric' as LineType,
+        notes: null,
+        duration_seconds: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }));
@@ -891,6 +1193,10 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       line_number: index,
       text,
       timestamp_ms: null,
+      character_id: null,
+      line_type: 'lyric' as LineType,
+      notes: null,
+      duration_seconds: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }));
@@ -1058,7 +1364,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                 }
               }}
               className="text-xl md:text-2xl font-bold text-base-content bg-transparent border-b-2 border-primary focus:outline-hidden w-full"
-              placeholder="Song title"
+              placeholder={`${CONTENT_TYPE_LABELS[contentType].singular} title`}
               autoFocus
             />
           ) : (
@@ -1067,18 +1373,18 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
               className="text-xl md:text-2xl font-bold text-base-content cursor-pointer hover:text-primary transition-colors"
               title="Click to edit"
             >
-              {title || 'New Song'}
+              {title || `New ${CONTENT_TYPE_LABELS[contentType].singular}`}
             </h2>
           )}
         </div>
       </div>
 
-      {/* Song Details Collapse */}
+      {/* Content Details Collapse */}
       <div className="mb-4 md:mb-6">
         <div className="collapse collapse-arrow bg-base-200 border border-base-300">
           <input type="checkbox" defaultChecked />
           <div className="collapse-title text-md font-semibold">
-            Song Details
+            {CONTENT_TYPE_LABELS[contentType].singular} Details
           </div>
           <div className="collapse-content">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 pt-2">
@@ -1087,20 +1393,20 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
                   </svg>
-                  Band
+                  {CONTENT_TYPE_LABELS[contentType].bandLabel}
                 </label>
                 <select
                   value={selectedBandId}
                   onChange={e => setSelectedBandId(e.target.value)}
                   className="select select-bordered w-full"
                 >
-                  <option value="">Select a band</option>
+                  <option value="">{CONTENT_TYPE_LABELS[contentType].bandPlaceholder}</option>
                   {availableBands.map(band => (
                     <option key={band._id} value={band._id}>{band.name}</option>
                   ))}
                 </select>
                 {availableBands.length === 0 && (
-                  <p className="text-xs text-base-content/60 mt-1">Create a band in Settings first</p>
+                  <p className="text-xs text-base-content/60 mt-1">{CONTENT_TYPE_LABELS[contentType].bandHint}</p>
                 )}
               </div>
               <div>
@@ -1108,7 +1414,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
                   </svg>
-                  Album
+                  {CONTENT_TYPE_LABELS[contentType].albumLabel}
                 </label>
                 <div className="flex gap-2">
                   <select
@@ -1117,7 +1423,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                     className="select select-bordered flex-1"
                     disabled={!selectedBandId}
                   >
-                    <option value="">No Album</option>
+                    <option value="">{CONTENT_TYPE_LABELS[contentType].albumPlaceholder}</option>
                     {availableAlbums.map(albumOption => (
                       <option key={albumOption._id} value={albumOption._id}>{albumOption.name}</option>
                     ))}
@@ -1127,7 +1433,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                     onClick={() => setShowCreateAlbumModal(true)}
                     disabled={!selectedBandId}
                     className="btn btn-square btn-ghost text-primary disabled:text-base-content/30"
-                    title={selectedBandId ? 'Create New Album' : 'Select a band first'}
+                    title={selectedBandId ? `Create New ${CONTENT_TYPE_LABELS[contentType].albumLabel}` : `Select a ${CONTENT_TYPE_LABELS[contentType].bandLabel.toLowerCase()} first`}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -1135,7 +1441,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   </button>
                 </div>
                 {!selectedBandId && (
-                  <p className="text-xs text-base-content/60 mt-1">Select a band first</p>
+                  <p className="text-xs text-base-content/60 mt-1">Select a {CONTENT_TYPE_LABELS[contentType].bandLabel.toLowerCase()} first</p>
                 )}
               </div>
               <div>
@@ -1143,7 +1449,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25H11.69z" />
                   </svg>
-                  Folder
+                  {CONTENT_TYPE_LABELS[contentType].folderLabel}
                 </label>
                 <div className="flex gap-2">
                   <select
@@ -1152,7 +1458,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                     className="select select-bordered flex-1"
                     disabled={!selectedBandId}
                   >
-                    <option value="">No Folder</option>
+                    <option value="">No {CONTENT_TYPE_LABELS[contentType].folderLabel}</option>
                     {availableFolders.map(folderOption => (
                       <option key={folderOption._id} value={folderOption._id}>{folderOption.name}</option>
                     ))}
@@ -1162,7 +1468,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                     onClick={() => setShowCreateFolderModal(true)}
                     disabled={!selectedBandId}
                     className="btn btn-square btn-ghost text-primary disabled:text-base-content/30"
-                    title={selectedBandId ? 'Create New Folder' : 'Select a band first'}
+                    title={selectedBandId ? `Create New ${CONTENT_TYPE_LABELS[contentType].folderLabel}` : `Select a ${CONTENT_TYPE_LABELS[contentType].bandLabel.toLowerCase()} first`}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -1170,7 +1476,7 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                   </button>
                 </div>
                 {!selectedBandId && (
-                  <p className="text-xs text-base-content/60 mt-1">Select a band first</p>
+                  <p className="text-xs text-base-content/60 mt-1">Select a {CONTENT_TYPE_LABELS[contentType].bandLabel.toLowerCase()} first</p>
                 )}
               </div>
               <div className="md:col-span-2">
@@ -1303,6 +1609,116 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
           </div>
         </div>
       </div>
+
+      {/* Character Management for Scripts */}
+      {contentType === 'script' && song && (
+        <div className="mb-4 md:mb-6">
+          <div className="collapse collapse-arrow bg-base-200 border border-base-300">
+            <input type="checkbox" defaultChecked />
+            <div className="collapse-title text-md font-semibold flex items-center gap-2">
+              <span className="text-2xl">🎭</span>
+              Characters
+            </div>
+            <div className="collapse-content">
+              <div className="pt-2 space-y-3">
+                {characters.length === 0 ? (
+                  <p className="text-sm text-base-content/60">No characters defined yet. Add characters to assign lines to them.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {characters.map(char => (
+                      <div
+                        key={char._id}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg border-2"
+                        style={{ borderColor: char.color, backgroundColor: `${char.color}15` }}
+                      >
+                        <span className="font-medium">{char.name}</span>
+                        {ROLE_OPTIONS[contentType].roles.length > 1 && char.role && (
+                          <span className="badge badge-sm badge-ghost">
+                            {ROLE_OPTIONS[contentType].labels[char.role]}
+                          </span>
+                        )}
+                        {char.is_user && (
+                          <span className="badge badge-sm badge-primary">You</span>
+                        )}
+                        <button
+                          onClick={() => {
+                            setEditingCharacter(char);
+                            setNewCharacterName(char.name);
+                            setNewCharacterRole(char.role || 'performer');
+                            setShowCharacterModal(true);
+                          }}
+                          className="btn btn-ghost btn-xs"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setEditingCharacter(null);
+                    setNewCharacterName('');
+                    setNewCharacterRole(ROLE_OPTIONS[contentType].roles[0] || 'performer');
+                    setShowCharacterModal(true);
+                  }}
+                  className="btn btn-sm btn-outline btn-primary gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Character
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Podcast/Speech Settings */}
+      {(contentType === 'podcast' || contentType === 'speech') && (
+        <div className="mb-4 md:mb-6">
+          <div className="collapse collapse-arrow bg-base-200 border border-base-300">
+            <input type="checkbox" defaultChecked />
+            <div className="collapse-title text-md font-semibold flex items-center gap-2">
+              <span className="text-2xl">{contentType === 'podcast' ? '🎙️' : '📢'}</span>
+              {contentType === 'podcast' ? 'Episode Settings' : 'Speech Settings'}
+            </div>
+            <div className="collapse-content">
+              <div className="pt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {contentType === 'podcast' && (
+                  <div>
+                    <label className="block text-xs md:text-sm font-semibold text-base-content mb-2">
+                      Episode Number
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={episodeNumber || ''}
+                      onChange={e => setEpisodeNumber(e.target.value ? parseInt(e.target.value) : null)}
+                      className="input input-bordered w-full"
+                      placeholder="e.g., 42"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs md:text-sm font-semibold text-base-content mb-2">
+                    Target Duration (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={durationTarget || ''}
+                    onChange={e => setDurationTarget(e.target.value ? parseInt(e.target.value) : null)}
+                    className="input input-bordered w-full"
+                    placeholder="e.g., 30"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {lyrics.length === 0 ? (
         <div className="space-y-6">
@@ -1805,9 +2221,75 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
                     onChange={e => updateLyricLine(index, e.target.value)}
                     className={`flex-1 px-2 md:px-3 py-1 md:py-2 bg-base-100 border focus:outline-hidden focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 text-xs md:text-base transition-all duration-300 ${
                       editedLineIndices.has(index) ? 'border-amber-300' : 'border-base-300'
+                    } ${
+                      line.line_type === 'stage_direction' ? 'italic text-base-content/60' :
+                      line.line_type === 'segment_header' ? 'font-bold text-primary' :
+                      line.line_type === 'cue' ? 'text-warning' :
+                      line.line_type === 'emphasis' ? 'font-semibold' :
+                      line.line_type === 'pause' ? 'text-base-content/40 italic' : ''
                     }`}
                     style={{borderRadius: '4px'}}
                   />
+                  {/* Line type selector for scripts/podcasts/speeches */}
+                  {(contentType === 'script' || contentType === 'podcast' || contentType === 'speech') && (
+                    <div className="dropdown dropdown-end">
+                      <button tabIndex={0} className="btn btn-xs btn-ghost gap-1" title="Line type">
+                        {line.line_type === 'dialogue' && <span>🗣️</span>}
+                        {line.line_type === 'stage_direction' && <span>📋</span>}
+                        {line.line_type === 'talking_point' && <span>💡</span>}
+                        {line.line_type === 'question' && <span>❓</span>}
+                        {line.line_type === 'segment_header' && <span>📌</span>}
+                        {line.line_type === 'cue' && <span>🔔</span>}
+                        {line.line_type === 'emphasis' && <span>⭐</span>}
+                        {line.line_type === 'pause' && <span>⏸️</span>}
+                        {(line.line_type === 'lyric' || !line.line_type) && <span>📝</span>}
+                      </button>
+                      <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-44">
+                        {contentType === 'script' && (
+                          <>
+                            <li><button onClick={() => updateLineType(index, 'dialogue')}>🗣️ Dialogue</button></li>
+                            <li><button onClick={() => updateLineType(index, 'stage_direction')}>📋 Stage Direction</button></li>
+                          </>
+                        )}
+                        {contentType === 'podcast' && (
+                          <>
+                            <li><button onClick={() => updateLineType(index, 'talking_point')}>💡 Talking Point</button></li>
+                            <li><button onClick={() => updateLineType(index, 'question')}>❓ Question</button></li>
+                            <li><button onClick={() => updateLineType(index, 'segment_header')}>📌 Segment Header</button></li>
+                          </>
+                        )}
+                        {contentType === 'speech' && (
+                          <>
+                            <li><button onClick={() => updateLineType(index, 'cue')}>🔔 Cue/Reminder</button></li>
+                            <li><button onClick={() => updateLineType(index, 'emphasis')}>⭐ Emphasis</button></li>
+                            <li><button onClick={() => updateLineType(index, 'pause')}>⏸️ Pause</button></li>
+                          </>
+                        )}
+                        <li><button onClick={() => updateLineType(index, 'lyric')}>📝 Normal</button></li>
+                      </ul>
+                    </div>
+                  )}
+                  {/* Character selector for scripts */}
+                  {contentType === 'script' && characters.length > 0 && (
+                    <div className="dropdown dropdown-end">
+                      <button tabIndex={0} className="btn btn-xs btn-ghost" style={{ color: characters.find(c => c._id === line.character_id)?.color || 'inherit' }}>
+                        {characters.find(c => c._id === line.character_id)?.name || 'No character'}
+                      </button>
+                      <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-40">
+                        <li><button onClick={() => updateLineCharacter(index, null)}>No character</button></li>
+                        {characters.map(char => (
+                          <li key={char._id}>
+                            <button
+                              onClick={() => updateLineCharacter(index, char._id)}
+                              style={{ color: char.color }}
+                            >
+                              {char.name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <button
                     onClick={() => addLineAfter(index)}
                     className="p-1 text-base-content/50 hover:text-green-600 transition-all duration-200"
@@ -1882,11 +2364,11 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       {showCreateAlbumModal && (
         <div className="modal modal-open">
           <div className="modal-box">
-            <h3 className="font-bold text-lg">Create New Album</h3>
+            <h3 className="font-bold text-lg">Create New {CONTENT_TYPE_LABELS[contentType].albumLabel}</h3>
             <div className="py-4">
               <input
                 type="text"
-                placeholder="Album name..."
+                placeholder={`${CONTENT_TYPE_LABELS[contentType].albumLabel} name...`}
                 value={newAlbumName}
                 onChange={e => setNewAlbumName(e.target.value)}
                 className="input input-bordered w-full"
@@ -1921,11 +2403,11 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
       {showCreateFolderModal && (
         <div className="modal modal-open">
           <div className="modal-box">
-            <h3 className="font-bold text-lg">Create New Folder</h3>
+            <h3 className="font-bold text-lg">Create New {CONTENT_TYPE_LABELS[contentType].folderLabel}</h3>
             <div className="py-4">
               <input
                 type="text"
-                placeholder="Folder name..."
+                placeholder={`${CONTENT_TYPE_LABELS[contentType].folderLabel} name...`}
                 value={newFolderName}
                 onChange={e => setNewFolderName(e.target.value)}
                 className="input input-bordered w-full"
@@ -2041,6 +2523,125 @@ export default function LyricEditor({ song, lyrics, onLyricsChange, onSongChange
             </div>
           </div>
           <div className="modal-backdrop" onClick={() => setShowCreateTagModal(false)} />
+        </div>
+      )}
+
+      {/* Character Modal */}
+      {showCharacterModal && (
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">
+              {editingCharacter ? 'Edit Character' : 'Add Character'}
+            </h3>
+            <div className="py-4 space-y-4">
+              <div>
+                <label className="label">
+                  <span className="label-text">
+                    {contentType === 'script' ? 'Character/Role Name' :
+                     contentType === 'podcast' ? 'Person Name' :
+                     'Character Name'}
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  placeholder={
+                    contentType === 'script' ? 'e.g., Romeo, Director, Stage Manager...' :
+                    contentType === 'podcast' ? 'e.g., John, Guest Expert...' :
+                    'e.g., Romeo, Juliet...'
+                  }
+                  value={newCharacterName}
+                  onChange={e => setNewCharacterName(e.target.value)}
+                  className="input input-bordered w-full"
+                  onKeyDown={e => e.key === 'Enter' && handleSaveCharacter()}
+                  autoFocus
+                />
+              </div>
+
+              {/* Role Selector - show when more than one role option */}
+              {ROLE_OPTIONS[contentType].roles.length > 1 && (
+                <div>
+                  <label className="label">
+                    <span className="label-text">Role Type</span>
+                  </label>
+                  <select
+                    value={newCharacterRole}
+                    onChange={e => setNewCharacterRole(e.target.value as CharacterRole)}
+                    className="select select-bordered w-full"
+                  >
+                    {ROLE_OPTIONS[contentType].roles.map(role => (
+                      <option key={role} value={role}>
+                        {ROLE_OPTIONS[contentType].labels[role]}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-base-content/60 mt-1">
+                    {contentType === 'script'
+                      ? 'Actors speak lines, Directors give cues, Narrators read stage directions'
+                      : contentType === 'podcast'
+                      ? 'Hosts lead the conversation, Guests are interviewed'
+                      : 'Select the role type for this person'}
+                  </p>
+                </div>
+              )}
+
+              {editingCharacter && (
+                <>
+                  <div className="divider">Role Assignment</div>
+                  <div className="flex flex-col gap-2">
+                    {editingCharacter.is_user ? (
+                      <div className="alert alert-info">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>This is your character. The AI will read other characters lines for you.</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleSetUserCharacter(editingCharacter._id)}
+                        className="btn btn-outline btn-primary"
+                      >
+                        Set as My Character
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="divider">Danger Zone</div>
+                  <button
+                    onClick={() => handleDeleteCharacter(editingCharacter._id)}
+                    className="btn btn-error btn-outline w-full"
+                  >
+                    Delete Character
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="modal-action">
+              <button
+                onClick={() => {
+                  setShowCharacterModal(false);
+                  setEditingCharacter(null);
+                  setNewCharacterName('');
+                  setNewCharacterRole('performer');
+                }}
+                className="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveCharacter}
+                disabled={!newCharacterName.trim()}
+                className="btn btn-primary"
+              >
+                {editingCharacter ? 'Save' : 'Add Character'}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => {
+            setShowCharacterModal(false);
+            setEditingCharacter(null);
+            setNewCharacterName('');
+            setNewCharacterRole('performer');
+          }} />
         </div>
       )}
     </div>

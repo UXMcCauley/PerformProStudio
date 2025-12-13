@@ -5,8 +5,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
-  activeTab: 'library' | 'editor' | 'teleprompter' | 'metrics' | 'social' | 'settings';
-  onTabChange: (tab: 'library' | 'editor' | 'teleprompter' | 'metrics' | 'social' | 'settings') => void;
+  activeTab: 'library' | 'editor' | 'teleprompter' | 'metrics' | 'shows' | 'social' | 'settings';
+  onTabChange: (tab: 'library' | 'editor' | 'teleprompter' | 'metrics' | 'shows' | 'social' | 'settings') => void;
   lyricsCount: number;
   pendingSocialCount?: number;
 }
@@ -35,7 +35,25 @@ export default function Header({ activeTab, onTabChange, lyricsCount, pendingSoc
   return (
     <header className="navbar fixed top-0 left-0 right-0 z-50 bg-base-100 border-b border-base-300 shadow-lg w-full mx-auto justify-right px-4 py-2" role="banner">
       <div className="navbar-start justify-right">
-        <span className="text-lg md:text-xl font-bold text-primary whitespace-nowrap">Lyric Teleprompter</span>
+        <div className="flex items-center gap-2">
+          {/* Logo Icon */}
+          <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-primary via-secondary to-accent flex items-center justify-center shadow-lg">
+            <svg className="w-5 h-5 text-primary-content" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
+            </svg>
+            {/* Decorative dot */}
+            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-success rounded-full animate-pulse shadow-sm"></div>
+          </div>
+          {/* Logo Text */}
+          <div className="hidden sm:flex flex-col leading-none">
+            <span className="text-base font-extrabold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent tracking-tight">
+              PerformPro
+            </span>
+            <span className="text-[10px] font-semibold text-base-content/60 tracking-widest uppercase">
+              Studio
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="navbar-center">
@@ -137,6 +155,30 @@ export default function Header({ activeTab, onTabChange, lyricsCount, pendingSoc
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 {activeTab === 'metrics' && (
+                  <div className="w-8 h-0.5 " />
+                )}
+              </button>
+
+              <button
+                onClick={() => onTabChange('shows')}
+                className={`btn btn-ghost btn-sm flex flex-col items-center gap-1 ${activeTab === 'shows'
+                    ? 'btn-active text-primary'
+                    : ''
+                  }`}
+                title="Shows"
+                aria-label="Shows & Setlists"
+                aria-current={activeTab === 'shows' ? 'page' : undefined}
+              >
+                <svg
+                  className="w-7 h-7"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+                {activeTab === 'shows' && (
                   <div className="w-8 h-0.5 " />
                 )}
               </button>

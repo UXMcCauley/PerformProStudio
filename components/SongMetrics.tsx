@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 
+type ContentType = 'lyrics' | 'script' | 'podcast' | 'speech';
+type LineType = 'lyric' | 'dialogue' | 'stage_direction' | 'talking_point' | 'question' | 'segment_header' | 'cue' | 'emphasis' | 'pause';
+
 type Song = {
   _id: string;
   title: string;
@@ -11,11 +14,16 @@ type Song = {
   tags: string[];
   soundcloud_url: string | null;
   instrumental_url: string | null;
+  artwork_url: string | null;
   completed: boolean;
   band_id: string | null;
   album_id: string | null;
   folder_id: string | null;
   user_id: string;
+  content_type: ContentType;
+  my_character_id: string | null;
+  episode_number: number | null;
+  duration_target_minutes: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -26,6 +34,10 @@ type LyricLine = {
   line_number: number;
   text: string;
   timestamp_ms: number | null;
+  character_id: string | null;
+  line_type: LineType;
+  notes: string | null;
+  duration_seconds: number | null;
   created_at: string;
   updated_at: string;
 };

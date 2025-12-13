@@ -64,7 +64,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ sessions, timeSegments });
   } catch (error) {
     console.error('Error fetching practice data:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
   }
 }
 
@@ -80,6 +81,11 @@ export async function POST(request: Request) {
 
     if (!songId) {
       return NextResponse.json({ error: 'Song ID is required' }, { status: 400 });
+    }
+
+    // Validate songId is a valid ObjectId format
+    if (!/^[0-9a-fA-F]{24}$/.test(songId)) {
+      return NextResponse.json({ error: 'Invalid song ID format' }, { status: 400 });
     }
 
     // Verify the song belongs to the user
@@ -101,6 +107,11 @@ export async function POST(request: Request) {
         duration_seconds: data.duration_seconds || null,
         completed: data.completed || false,
       });
+
+      if (!practiceSession) {
+        return NextResponse.json({ error: 'Failed to create practice session' }, { status: 500 });
+      }
+
       return NextResponse.json(practiceSession, { status: 201 });
     }
 
@@ -127,7 +138,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
   } catch (error) {
     console.error('Error creating practice data:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
   }
 }
 
@@ -153,6 +165,7 @@ export async function PUT(request: Request) {
     return NextResponse.json(practiceSession);
   } catch (error) {
     console.error('Error updating practice session:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
   }
 }

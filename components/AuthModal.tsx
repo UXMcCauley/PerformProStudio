@@ -87,7 +87,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
           <h2 className="auth-modal-title">
             {mode === 'signin' && 'Welcome Back'}
-            {mode === 'signup' && 'Join IntelliPrompter'}
+            {mode === 'signup' && 'Join PerformPro Studio'}
             {mode === 'reset' && 'Reset Password'}
           </h2>
           <p className="auth-modal-subtitle">

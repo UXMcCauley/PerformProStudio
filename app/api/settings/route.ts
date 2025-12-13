@@ -25,17 +25,35 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
     const { theme, name, email, avatar } = body;
 
-    const settings = await upsertUserSettings(session.user.id, {
-      theme,
-      name,
-      email,
-      avatar,
-    });
+    // Validate theme if provided
+    if (theme !== undefined && theme !== 'light' && theme !== 'dark') {
+      return NextResponse.json({ error: 'Invalid theme value' }, { status: 400 });
+    }
+
+    let settings;
+    try {
+      settings = await upsertUserSettings(session.user.id, {
+        theme,
+        name,
+        email,
+        avatar,
+      });
+    } catch (dbError) {
+      console.error('Database error in upsertUserSettings:', dbError);
+      return NextResponse.json({ error: 'Database error' }, { status: 500 });
+    }
 
     if (!settings) {
+      console.error('upsertUserSettings returned null for user:', session.user.id);
       return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
     }
 

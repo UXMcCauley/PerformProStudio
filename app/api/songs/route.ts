@@ -27,15 +27,38 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { title, artist, album, folder, tags, soundcloud_url, instrumental_url, artwork_url, completed, band_id, album_id, folder_id } = body;
+    const {
+      title,
+      artist,
+      album,
+      folder,
+      tags,
+      soundcloud_url,
+      instrumental_url,
+      artwork_url,
+      completed,
+      band_id,
+      album_id,
+      folder_id,
+      content_type,
+      my_character_id,
+      episode_number,
+      duration_target_minutes,
+    } = body;
 
-    if (!title?.trim() || !artist?.trim()) {
-      return NextResponse.json({ error: 'Title and artist are required' }, { status: 400 });
+    if (!title?.trim()) {
+      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+    }
+
+    // Artist is required for lyrics, optional for other content types
+    const ct = content_type || 'lyrics';
+    if (ct === 'lyrics' && !artist?.trim()) {
+      return NextResponse.json({ error: 'Artist is required for lyrics' }, { status: 400 });
     }
 
     const song = await createSong({
       title: title.trim(),
-      artist: artist.trim(),
+      artist: artist?.trim() || '',
       album: album || null,
       folder: folder || null,
       tags: tags || [],
@@ -47,6 +70,10 @@ export async function POST(request: Request) {
       album_id: album_id || null,
       folder_id: folder_id || null,
       user_id: session.user.id,
+      content_type: ct,
+      my_character_id: my_character_id || null,
+      episode_number: episode_number || null,
+      duration_target_minutes: duration_target_minutes || null,
     });
 
     if (!song) {

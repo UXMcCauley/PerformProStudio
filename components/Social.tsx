@@ -37,17 +37,32 @@ interface BandInvite {
   created_at: string;
 }
 
+interface PracticeInvite {
+  _id: string;
+  show_id: string;
+  band_id: string;
+  show_name: string;
+  show_date: string;
+  show_time: string | null;
+  show_venue: string | null;
+  band_name: string;
+  from_user_name: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+}
+
 interface Props {
   onBack: () => void;
   showBackButton: boolean;
 }
 
 export default function Social({ onBack, showBackButton }: Props) {
-  const [activeSection, setActiveSection] = useState<'friends' | 'requests' | 'invites'>('friends');
+  const [activeSection, setActiveSection] = useState<'friends' | 'requests' | 'invites' | 'practices'>('friends');
   const [friends, setFriends] = useState<Friend[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
   const [bandInvites, setBandInvites] = useState<BandInvite[]>([]);
+  const [practiceInvites, setPracticeInvites] = useState<PracticeInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -61,29 +76,33 @@ export default function Social({ onBack, showBackButton }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const [friendsRes, incomingRes, sentRes, invitesRes] = await Promise.all([
+      const [friendsRes, incomingRes, sentRes, invitesRes, practiceRes] = await Promise.all([
         fetch('/api/friends'),
         fetch('/api/friend-requests?type=incoming'),
         fetch('/api/friend-requests?type=sent'),
         fetch('/api/band-invites'),
+        fetch('/api/practice-invites?pending=true'),
       ]);
 
       if (!friendsRes.ok) throw new Error('Failed to load friends');
       if (!incomingRes.ok) throw new Error('Failed to load friend requests');
       if (!sentRes.ok) throw new Error('Failed to load sent requests');
       if (!invitesRes.ok) throw new Error('Failed to load band invites');
+      if (!practiceRes.ok) throw new Error('Failed to load practice invites');
 
-      const [friendsData, incomingData, sentData, invitesData] = await Promise.all([
+      const [friendsData, incomingData, sentData, invitesData, practiceData] = await Promise.all([
         friendsRes.json(),
         incomingRes.json(),
         sentRes.json(),
         invitesRes.json(),
+        practiceRes.json(),
       ]);
 
       setFriends(friendsData);
       setIncomingRequests(incomingData);
       setSentRequests(sentData);
       setBandInvites(invitesData);
+      setPracticeInvites(practiceData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -201,6 +220,25 @@ export default function Social({ onBack, showBackButton }: Props) {
     }
   };
 
+  const respondToPracticeInvite = async (inviteId: string, accept: boolean) => {
+    setActionLoading(inviteId);
+    try {
+      const res = await fetch('/api/practice-invites', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inviteId, accept }),
+      });
+
+      if (!res.ok) throw new Error('Failed to respond to practice invite');
+
+      setPracticeInvites(prev => prev.filter(i => i._id !== inviteId));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to respond');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
       month: 'short',
@@ -209,7 +247,7 @@ export default function Social({ onBack, showBackButton }: Props) {
     });
   };
 
-  const pendingCount = incomingRequests.length + bandInvites.length;
+  const pendingCount = incomingRequests.length + bandInvites.length + practiceInvites.length;
 
   if (loading) {
     return (
@@ -244,7 +282,7 @@ export default function Social({ onBack, showBackButton }: Props) {
       )}
 
       {/* Section Tabs */}
-      <div className="tabs tabs-boxed mb-6">
+      <div className="tabs tabs-boxed mb-6 flex-wrap">
         <button
           className={`tab ${activeSection === 'friends' ? 'tab-active' : ''}`}
           onClick={() => setActiveSection('friends')}
@@ -267,6 +305,15 @@ export default function Social({ onBack, showBackButton }: Props) {
           Band Invites
           {bandInvites.length > 0 && (
             <span className="badge badge-secondary badge-sm ml-2">{bandInvites.length}</span>
+          )}
+        </button>
+        <button
+          className={`tab ${activeSection === 'practices' ? 'tab-active' : ''}`}
+          onClick={() => setActiveSection('practices')}
+        >
+          Practices
+          {practiceInvites.length > 0 && (
+            <span className="badge badge-accent badge-sm ml-2">{practiceInvites.length}</span>
           )}
         </button>
       </div>
@@ -305,12 +352,12 @@ export default function Social({ onBack, showBackButton }: Props) {
                     <div className="flex items-center gap-3">
                       <div className="avatar placeholder">
                         <div className="bg-primary text-primary-content rounded-full w-10">
-                          <span>{friend.friend_name?.[0]?.toUpperCase() || friend.friend_email[0].toUpperCase()}</span>
+                          <span>{friend.friend_name?.[0]?.toUpperCase() || friend.friend_email?.[0]?.toUpperCase() || '?'}</span>
                         </div>
                       </div>
                       <div>
                         <p className="font-medium">{friend.friend_name || 'Unknown'}</p>
-                        <p className="text-sm text-base-content/60">{friend.friend_email}</p>
+                        <p className="text-sm text-base-content/60">{friend.friend_email || 'No email'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -358,12 +405,12 @@ export default function Social({ onBack, showBackButton }: Props) {
                         <div className="flex items-center gap-3">
                           <div className="avatar placeholder">
                             <div className="bg-secondary text-secondary-content rounded-full w-10">
-                              <span>{request.from_user_name?.[0]?.toUpperCase() || request.from_user_email[0].toUpperCase()}</span>
+                              <span>{request.from_user_name?.[0]?.toUpperCase() || request.from_user_email?.[0]?.toUpperCase() || '?'}</span>
                             </div>
                           </div>
                           <div>
                             <p className="font-medium">{request.from_user_name || 'Unknown'}</p>
-                            <p className="text-sm text-base-content/60">{request.from_user_email}</p>
+                            <p className="text-sm text-base-content/60">{request.from_user_email || 'No email'}</p>
                             {request.message && (
                               <p className="text-sm mt-1 italic">"{request.message}"</p>
                             )}
@@ -413,12 +460,12 @@ export default function Social({ onBack, showBackButton }: Props) {
                       <div className="flex items-center gap-3">
                         <div className="avatar placeholder">
                           <div className="bg-neutral text-neutral-content rounded-full w-10">
-                            <span>{request.to_user_name?.[0]?.toUpperCase() || request.to_user_email[0].toUpperCase()}</span>
+                            <span>{request.to_user_name?.[0]?.toUpperCase() || request.to_user_email?.[0]?.toUpperCase() || '?'}</span>
                           </div>
                         </div>
                         <div>
                           <p className="font-medium">{request.to_user_name || 'Unknown'}</p>
-                          <p className="text-sm text-base-content/60">{request.to_user_email}</p>
+                          <p className="text-sm text-base-content/60">{request.to_user_email || 'No email'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -496,6 +543,88 @@ export default function Social({ onBack, showBackButton }: Props) {
                       </div>
                     </div>
                     <p className="text-xs text-base-content/50 mt-2">{formatDate(invite.created_at)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Practice Invites Section */}
+      {activeSection === 'practices' && (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Practice Invitations</h2>
+          {practiceInvites.length === 0 ? (
+            <div className="card bg-base-200">
+              <div className="card-body items-center text-center py-12">
+                <svg className="w-16 h-16 text-base-content/30 mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                </svg>
+                <p className="text-base-content/60">No practice invitations</p>
+                <p className="text-sm text-base-content/40">When someone invites you to a band practice, it will appear here</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {practiceInvites.map(invite => (
+                <div key={invite._id} className="card bg-base-200">
+                  <div className="card-body py-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-lg">🎸</span>
+                          <p className="font-semibold text-lg">{invite.show_name}</p>
+                        </div>
+                        <p className="text-sm text-base-content/70 font-medium">{invite.band_name}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm text-base-content/60">
+                          <span className="flex items-center gap-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                            </svg>
+                            {new Date(invite.show_date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          </span>
+                          {invite.show_time && (
+                            <span className="flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              {invite.show_time}
+                            </span>
+                          )}
+                          {invite.show_venue && (
+                            <span className="flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                              </svg>
+                              {invite.show_venue}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-base-content/50 mt-2">
+                          Invited by {invite.from_user_name}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => respondToPracticeInvite(invite._id, true)}
+                          disabled={actionLoading === invite._id}
+                          className="btn btn-success btn-sm"
+                        >
+                          {actionLoading === invite._id ? (
+                            <span className="loading loading-spinner loading-xs"></span>
+                          ) : "I'm In"}
+                        </button>
+                        <button
+                          onClick={() => respondToPracticeInvite(invite._id, false)}
+                          disabled={actionLoading === invite._id}
+                          className="btn btn-ghost btn-sm"
+                        >
+                          Can't Make It
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}

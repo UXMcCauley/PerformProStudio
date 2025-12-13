@@ -235,17 +235,17 @@ export async function getPendingFriendRequests(userId: string): Promise<any[]> {
         status: 1,
         message: 1,
         created_at: 1,
-        from_user: {
-          _id: '$from_user._id',
-          displayName: '$from_user.displayName',
-          email: '$from_user.email',
-        },
+        from_user_name: { $ifNull: ['$from_user.displayName', '$from_user.email'] },
+        from_user_email: '$from_user.email',
       },
     },
     { $sort: { created_at: -1 } },
   ]).toArray();
 
-  return requests;
+  return requests.map(r => ({
+    ...r,
+    _id: r._id.toString(),
+  }));
 }
 
 export async function getSentFriendRequests(userId: string): Promise<any[]> {
@@ -282,17 +282,17 @@ export async function getSentFriendRequests(userId: string): Promise<any[]> {
         status: 1,
         message: 1,
         created_at: 1,
-        to_user: {
-          _id: '$to_user._id',
-          displayName: '$to_user.displayName',
-          email: '$to_user.email',
-        },
+        to_user_name: { $ifNull: ['$to_user.displayName', '$to_user.email'] },
+        to_user_email: '$to_user.email',
       },
     },
     { $sort: { created_at: -1 } },
   ]).toArray();
 
-  return requests;
+  return requests.map(r => ({
+    ...r,
+    _id: r._id.toString(),
+  }));
 }
 
 // ============================================
@@ -335,17 +335,21 @@ export async function getFriends(userId: string): Promise<any[]> {
     },
     {
       $project: {
-        _id: '$friend._id',
-        displayName: { $ifNull: ['$friend.displayName', '$friend.email'] },
-        email: '$friend.email',
+        _id: 1,
+        friend_id: '$friend_id',
+        friend_name: { $ifNull: ['$friend.displayName', '$friend.email'] },
+        friend_email: '$friend.email',
         avatar: '$friend_settings.avatar',
-        created_at: '$created_at',
+        since: '$created_at',
       },
     },
-    { $sort: { displayName: 1 } },
+    { $sort: { friend_name: 1 } },
   ]).toArray();
 
-  return friends;
+  return friends.map(f => ({
+    ...f,
+    _id: f._id.toString(),
+  }));
 }
 
 export async function removeFriend(userId: string, friendId: string): Promise<boolean> {
@@ -632,10 +636,10 @@ export async function getUserBandMembership(
   };
 }
 
-export async function getUserBands(userId: string): Promise<any[]> {
+export async function getUserBands(userId: string, contentType?: string): Promise<any[]> {
   const db = await getDb();
 
-  const bands = await db.collection('band_members').aggregate([
+  const pipeline: any[] = [
     {
       $match: { user_id: userId },
     },
@@ -655,17 +659,30 @@ export async function getUserBands(userId: string): Promise<any[]> {
     {
       $unwind: { path: '$band', preserveNullAndEmptyArrays: true },
     },
+  ];
+
+  // Filter by content_type if specified
+  if (contentType) {
+    pipeline.push({
+      $match: { 'band.content_type': contentType },
+    });
+  }
+
+  pipeline.push(
     {
       $project: {
         _id: '$band._id',
         name: '$band.name',
+        content_type: '$band.content_type',
         role: '$role',
         joined_at: '$joined_at',
         created_at: '$band.created_at',
       },
     },
-    { $sort: { name: 1 } },
-  ]).toArray();
+    { $sort: { name: 1 } }
+  );
+
+  const bands = await db.collection('band_members').aggregate(pipeline).toArray();
 
   return bands;
 }
@@ -828,21 +845,19 @@ export async function getPendingBandInvites(userId: string): Promise<any[]> {
         role: 1,
         message: 1,
         created_at: 1,
-        band: {
-          _id: '$band._id',
-          name: '$band.name',
-        },
-        from_user: {
-          _id: '$from_user._id',
-          displayName: { $ifNull: ['$from_user.displayName', '$from_user.email'] },
-          email: '$from_user.email',
-        },
+        band_name: '$band.name',
+        invited_by_id: '$from_user_id',
+        invited_by_name: { $ifNull: ['$from_user.displayName', '$from_user.email'] },
+        invited_by_email: '$from_user.email',
       },
     },
     { $sort: { created_at: -1 } },
   ]).toArray();
 
-  return invites;
+  return invites.map(i => ({
+    ...i,
+    _id: i._id.toString(),
+  }));
 }
 
 // ============================================
@@ -944,4 +959,355 @@ export async function isBandOwner(
   });
 
   return !!member;
+}
+
+// ============================================
+// PRACTICE INVITES
+// ============================================
+
+export type PracticeInviteStatus = 'pending' | 'accepted' | 'declined';
+
+export interface PracticeInvite {
+  _id: string;
+  show_id: string;        // Reference to the practice/show
+  band_id: string;
+  from_user_id: string;
+  to_user_id: string;
+  status: PracticeInviteStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createPracticeInvites(
+  showId: string,
+  bandId: string,
+  fromUserId: string,
+  toUserIds: string[]
+): Promise<PracticeInvite[]> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+
+  // Filter out the sender (can't invite yourself)
+  const validUserIds = toUserIds.filter(id => id !== fromUserId);
+
+  if (validUserIds.length === 0) return [];
+
+  // Delete any existing invites for this show (to allow re-inviting)
+  await db.collection('practice_invites').deleteMany({
+    show_id: showId,
+    to_user_id: { $in: validUserIds }
+  });
+
+  const invites = validUserIds.map(toUserId => ({
+    show_id: showId,
+    band_id: bandId,
+    from_user_id: fromUserId,
+    to_user_id: toUserId,
+    status: 'pending' as PracticeInviteStatus,
+    created_at: now,
+    updated_at: now,
+  }));
+
+  const result = await db.collection('practice_invites').insertMany(invites);
+
+  return invites.map((invite, index) => ({
+    _id: result.insertedIds[index].toString(),
+    ...invite,
+  }));
+}
+
+export async function getPracticeInvitesForShow(showId: string): Promise<any[]> {
+  const db = await getDb();
+
+  const invites = await db.collection('practice_invites').aggregate([
+    { $match: { show_id: showId } },
+    {
+      $addFields: {
+        to_user_oid: { $toObjectId: '$to_user_id' },
+      },
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'to_user_oid',
+        foreignField: '_id',
+        as: 'to_user',
+      },
+    },
+    { $unwind: { path: '$to_user', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'user_settings',
+        localField: 'to_user_id',
+        foreignField: 'user_id',
+        as: 'user_settings',
+      },
+    },
+    { $unwind: { path: '$user_settings', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        show_id: 1,
+        band_id: 1,
+        to_user_id: 1,
+        status: 1,
+        created_at: 1,
+        user_name: { $ifNull: ['$to_user.displayName', '$to_user.email'] },
+        user_email: '$to_user.email',
+        user_avatar: '$user_settings.avatar',
+      },
+    },
+    { $sort: { user_name: 1 } },
+  ]).toArray();
+
+  return invites.map(i => ({
+    ...i,
+    _id: i._id.toString(),
+  }));
+}
+
+export async function getPendingPracticeInvites(userId: string): Promise<any[]> {
+  const db = await getDb();
+
+  const invites = await db.collection('practice_invites').aggregate([
+    {
+      $match: {
+        to_user_id: userId,
+        status: 'pending',
+      },
+    },
+    {
+      $addFields: {
+        show_oid: { $toObjectId: '$show_id' },
+        from_user_oid: { $toObjectId: '$from_user_id' },
+        band_oid: { $toObjectId: '$band_id' },
+      },
+    },
+    {
+      $lookup: {
+        from: 'shows',
+        localField: 'show_oid',
+        foreignField: '_id',
+        as: 'show',
+      },
+    },
+    { $unwind: { path: '$show', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'bands',
+        localField: 'band_oid',
+        foreignField: '_id',
+        as: 'band',
+      },
+    },
+    { $unwind: { path: '$band', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'from_user_oid',
+        foreignField: '_id',
+        as: 'from_user',
+      },
+    },
+    { $unwind: { path: '$from_user', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        show_id: 1,
+        band_id: 1,
+        status: 1,
+        created_at: 1,
+        show_name: '$show.name',
+        show_date: '$show.date',
+        show_time: '$show.time',
+        show_venue: '$show.venue',
+        band_name: '$band.name',
+        from_user_name: { $ifNull: ['$from_user.displayName', '$from_user.email'] },
+      },
+    },
+    { $sort: { show_date: 1, show_time: 1 } },
+  ]).toArray();
+
+  return invites.map(i => ({
+    ...i,
+    _id: i._id.toString(),
+  }));
+}
+
+export async function respondToPracticeInvite(
+  inviteId: string,
+  userId: string,
+  accept: boolean
+): Promise<boolean> {
+  const db = await getDb();
+
+  const result = await db.collection('practice_invites').updateOne(
+    {
+      _id: new ObjectId(inviteId),
+      to_user_id: userId,
+      status: 'pending',
+    },
+    {
+      $set: {
+        status: accept ? 'accepted' : 'declined',
+        updated_at: new Date().toISOString(),
+      },
+    }
+  );
+
+  return result.modifiedCount > 0;
+}
+
+export async function deletePracticeInvitesForShow(showId: string): Promise<boolean> {
+  const db = await getDb();
+  await db.collection('practice_invites').deleteMany({ show_id: showId });
+  return true;
+}
+
+// ============================================
+// SHARED SONGS
+// ============================================
+
+export interface SharedSong {
+  _id: string;
+  song_id: string;
+  band_id: string;
+  shared_by: string;       // user_id who shared
+  shared_at: string;
+  created_at: string;
+}
+
+export async function shareSongWithBand(
+  songId: string,
+  bandId: string,
+  userId: string
+): Promise<SharedSong | null> {
+  const db = await getDb();
+
+  // Check if already shared
+  const existing = await db.collection('shared_songs').findOne({
+    song_id: songId,
+    band_id: bandId,
+  });
+
+  if (existing) {
+    return {
+      _id: existing._id.toString(),
+      song_id: existing.song_id,
+      band_id: existing.band_id,
+      shared_by: existing.shared_by,
+      shared_at: existing.shared_at,
+      created_at: existing.created_at,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const doc = {
+    song_id: songId,
+    band_id: bandId,
+    shared_by: userId,
+    shared_at: now,
+    created_at: now,
+  };
+
+  const result = await db.collection('shared_songs').insertOne(doc);
+  return {
+    _id: result.insertedId.toString(),
+    ...doc,
+  };
+}
+
+export async function unshareSongFromBand(
+  songId: string,
+  bandId: string,
+  userId: string
+): Promise<boolean> {
+  const db = await getDb();
+
+  // Only the original sharer or band admin/owner can unshare
+  const shared = await db.collection('shared_songs').findOne({
+    song_id: songId,
+    band_id: bandId,
+  });
+
+  if (!shared) return false;
+
+  // Check if user is the sharer or has admin access
+  const canUnshare = shared.shared_by === userId || await canEditBand(bandId, userId);
+  if (!canUnshare) return false;
+
+  const result = await db.collection('shared_songs').deleteOne({
+    song_id: songId,
+    band_id: bandId,
+  });
+
+  return result.deletedCount > 0;
+}
+
+export async function getSharedSongsForBand(bandId: string): Promise<any[]> {
+  const db = await getDb();
+
+  const sharedSongs = await db.collection('shared_songs').aggregate([
+    { $match: { band_id: bandId } },
+    {
+      $addFields: {
+        song_oid: { $toObjectId: '$song_id' },
+        shared_by_oid: { $toObjectId: '$shared_by' },
+      },
+    },
+    {
+      $lookup: {
+        from: 'songs',
+        localField: 'song_oid',
+        foreignField: '_id',
+        as: 'song',
+      },
+    },
+    { $unwind: { path: '$song', preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'shared_by_oid',
+        foreignField: '_id',
+        as: 'sharer',
+      },
+    },
+    { $unwind: { path: '$sharer', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        _id: 1,
+        song_id: 1,
+        band_id: 1,
+        shared_at: 1,
+        shared_by: 1,
+        shared_by_name: { $ifNull: ['$sharer.displayName', '$sharer.email'] },
+        song: {
+          _id: '$song._id',
+          title: '$song.title',
+          artist: '$song.artist',
+          album: '$song.album',
+          artwork_url: '$song.artwork_url',
+          completed: '$song.completed',
+          tags: '$song.tags',
+        },
+      },
+    },
+    { $sort: { shared_at: -1 } },
+  ]).toArray();
+
+  return sharedSongs.map(s => ({
+    ...s,
+    _id: s._id.toString(),
+    song: s.song ? {
+      ...s.song,
+      _id: s.song._id?.toString(),
+    } : null,
+  }));
+}
+
+export async function getBandsForSong(songId: string): Promise<string[]> {
+  const db = await getDb();
+
+  const shares = await db.collection('shared_songs').find({ song_id: songId }).toArray();
+  return shares.map(s => s.band_id);
 }

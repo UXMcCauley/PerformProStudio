@@ -31,14 +31,29 @@ export async function getDb(): Promise<Db> {
 }
 
 // Type definitions
+
+// Content types for grouping entities
+export type GroupContentType = 'band' | 'production' | 'podcast' | 'organization';
+
+// Band represents different group types based on content:
+// - band: Music band/group (for lyrics)
+// - production: Theater company/production team (for scripts)
+// - podcast: Podcast show (for podcasts)
+// - organization: Organization/company (for speeches)
 export type Band = {
   _id: string;
   user_id: string;
   name: string;
+  content_type: GroupContentType;  // What type of group this is
   created_at: string;
   updated_at: string;
 };
 
+// Album represents different collection types based on parent's content_type:
+// - band → Album (music album)
+// - production → Show/Play (theatrical production)
+// - podcast → Season (podcast season)
+// - organization → Event/Series (speaking event)
 export type Album = {
   _id: string;
   band_id: string;
@@ -49,6 +64,11 @@ export type Album = {
   updated_at: string;
 };
 
+// Folder represents different organization types based on parent's content_type:
+// - band → Folder (general folder)
+// - production → Project (production project)
+// - podcast → Category (episode category)
+// - organization → Topic (speech topic)
 export type Folder = {
   _id: string;
   band_id: string;
@@ -67,10 +87,13 @@ export type TagConfig = {
   updated_at: string;
 };
 
+// Content types for different use cases
+export type ContentType = 'lyrics' | 'script' | 'podcast' | 'speech';
+
 export type Song = {
   _id: string;
   title: string;
-  artist: string;
+  artist: string;  // For lyrics: artist name, scripts: production/show name, podcasts: show name, speeches: event name
   album: string | null;
   folder: string | null;
   tags: string[];
@@ -83,9 +106,45 @@ export type Song = {
   folder_id: string | null;
   user_id: string;
   display_order: number;
+  content_type: ContentType;  // What type of content this is
+  // Script-specific fields
+  my_character_id: string | null;  // Which character the user is practicing
+  // Podcast-specific fields
+  episode_number: number | null;
+  // Speech-specific fields
+  duration_target_minutes: number | null;  // Target speech duration
   created_at: string;
   updated_at: string;
 };
+
+// Character roles for scripts/podcasts
+export type CharacterRole = 'performer' | 'director' | 'narrator' | 'crew' | 'host' | 'guest';
+
+// Character for scripts (actors practicing with other parts read by TTS)
+export type Character = {
+  _id: string;
+  song_id: string;  // The script this character belongs to
+  name: string;
+  color: string;  // For visual distinction in editor
+  voice_id: string | null;  // TTS voice to use for this character
+  is_user: boolean;  // Is this the character the user is practicing?
+  role: CharacterRole;  // Type of role (performer, director, narrator, etc.)
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// Line types for different content
+export type LineType =
+  | 'lyric'           // Regular lyrics line
+  | 'dialogue'        // Script dialogue
+  | 'stage_direction' // Script stage directions (actions, etc.)
+  | 'talking_point'   // Podcast talking point
+  | 'question'        // Podcast interview question
+  | 'segment_header'  // Podcast/speech segment header
+  | 'cue'             // Speech cue/prompt
+  | 'emphasis'        // Speech emphasis point
+  | 'pause';          // Intentional pause marker
 
 export type LyricLine = {
   _id: string;
@@ -93,6 +152,11 @@ export type LyricLine = {
   line_number: number;
   text: string;
   timestamp_ms: number | null;
+  // Extended fields for different content types
+  character_id: string | null;  // For scripts: which character speaks this line
+  line_type: LineType;          // What kind of line this is
+  notes: string | null;         // Additional notes (stage directions, delivery notes)
+  duration_seconds: number | null; // For speeches: estimated time for this section
   created_at: string;
   updated_at: string;
 };
@@ -145,6 +209,44 @@ export type User = {
   updated_at: string;
 };
 
+// Show types for setlist feature
+export type Show = {
+  _id: string;
+  band_id: string;
+  name: string;
+  date: string;           // ISO date "2024-12-20"
+  time: string | null;    // "20:00" or null
+  venue: string | null;
+  notes: string | null;
+  event_type: 'show' | 'practice';  // Type of event
+  created_by: string;     // user_id who created
+  created_at: string;
+  updated_at: string;
+};
+
+export type SetlistItem = {
+  _id: string;
+  show_id: string;
+  type: 'song' | 'artifact';
+  song_id: string | null;
+  artifact_id: string | null;
+  custom_title: string | null;  // Custom title for artifacts (e.g., "Stage Banter", "Crowd Work")
+  custom_text: string | null;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ArtifactTemplate = {
+  _id: string;
+  band_id: string;
+  name: string;
+  default_text: string;
+  color: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // Helper to convert MongoDB _id to string id for client compatibility
 function toClientDoc<T extends { _id: ObjectId | string }>(doc: T): Omit<T, '_id'> & { _id: string } {
   return {
@@ -191,24 +293,36 @@ export async function upsertUserSettings(
     if (settings.email !== undefined) updateFields.email = settings.email;
     if (settings.avatar !== undefined) updateFields.avatar = settings.avatar;
 
-    const result = await db.collection('user_settings').findOneAndUpdate(
+    // Build $setOnInsert fields - exclude fields that are in $set to avoid conflict
+    const setOnInsertFields: Record<string, unknown> = {
+      user_id: userId,
+      created_at: now,
+    };
+    // Only add theme to $setOnInsert if NOT being updated (to avoid conflict with $set)
+    if (settings.theme === undefined) {
+      setOnInsertFields.theme = 'dark';
+    }
+
+    // Use updateOne with upsert instead of findOneAndUpdate for better compatibility
+    await db.collection('user_settings').updateOne(
       { user_id: userId },
       {
         $set: updateFields,
-        $setOnInsert: {
-          user_id: userId,
-          theme: settings.theme || 'dark',
-          created_at: now,
-        },
+        $setOnInsert: setOnInsertFields,
       },
-      { upsert: true, returnDocument: 'after' }
+      { upsert: true }
     );
 
-    if (!result) return null;
-    return toClientDoc(result) as UserSettings;
+    // Fetch the updated/inserted document
+    const doc = await db.collection('user_settings').findOne({ user_id: userId });
+    if (!doc) {
+      console.error('Could not find user_settings after upsert for user:', userId);
+      return null;
+    }
+    return toClientDoc(doc) as UserSettings;
   } catch (error) {
     console.error('Error upserting user settings:', error);
-    return null;
+    throw error;
   }
 }
 
@@ -227,13 +341,14 @@ export async function getUserBands(userId: string): Promise<Band[]> {
   }
 }
 
-export async function createBand(userId: string, name: string): Promise<Band | null> {
+export async function createBand(userId: string, name: string, contentType: GroupContentType = 'band'): Promise<Band | null> {
   try {
     const db = await getDb();
     const now = new Date().toISOString();
     const doc = {
       user_id: userId,
       name,
+      content_type: contentType,
       created_at: now,
       updated_at: now,
     };
@@ -570,6 +685,100 @@ export async function getAlbumSongs(albumName: string, userId: string): Promise<
   }
 }
 
+// ============================================
+// CHARACTER FUNCTIONS (for scripts)
+// ============================================
+
+export async function getCharacters(songId: string): Promise<Character[]> {
+  try {
+    const db = await getDb();
+    const docs = await db.collection('characters')
+      .find({ song_id: songId })
+      .sort({ display_order: 1 })
+      .toArray();
+    return docs.map(doc => toClientDoc(doc)) as Character[];
+  } catch (error) {
+    console.error('Error fetching characters:', error);
+    return [];
+  }
+}
+
+export async function createCharacter(character: Omit<Character, '_id' | 'created_at' | 'updated_at' | 'display_order'>): Promise<Character | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    // Get max display_order for this script's characters
+    const maxOrderDoc = await db.collection('characters')
+      .find({ song_id: character.song_id })
+      .sort({ display_order: -1 })
+      .limit(1)
+      .toArray();
+    const maxOrder = maxOrderDoc.length > 0 ? (maxOrderDoc[0].display_order || 0) : 0;
+
+    const doc = {
+      ...character,
+      display_order: maxOrder + 1,
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await db.collection('characters').insertOne(doc);
+    return { ...doc, _id: result.insertedId.toString() } as Character;
+  } catch (error) {
+    console.error('Error creating character:', error);
+    return null;
+  }
+}
+
+export async function updateCharacter(characterId: string, updates: Partial<Character>): Promise<Character | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const result = await db.collection('characters').findOneAndUpdate(
+      { _id: new ObjectId(characterId) },
+      { $set: { ...updates, updated_at: now } },
+      { returnDocument: 'after' }
+    );
+
+    if (!result) return null;
+    return toClientDoc(result) as Character;
+  } catch (error) {
+    console.error('Error updating character:', error);
+    return null;
+  }
+}
+
+export async function deleteCharacter(characterId: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+
+    // Remove character from any lines that reference it
+    await db.collection('lyric_lines').updateMany(
+      { character_id: characterId },
+      { $set: { character_id: null } }
+    );
+
+    const result = await db.collection('characters').deleteOne({ _id: new ObjectId(characterId) });
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error('Error deleting character:', error);
+    return false;
+  }
+}
+
+// Default character colors for visual distinction
+export const CHARACTER_COLORS = [
+  '#3B82F6', // Blue
+  '#EF4444', // Red
+  '#10B981', // Green
+  '#F59E0B', // Amber
+  '#8B5CF6', // Purple
+  '#EC4899', // Pink
+  '#06B6D4', // Cyan
+  '#F97316', // Orange
+];
+
 // Get unique album names with cover art from user's albums collection or songs
 export type UserAlbum = {
   _id: string;
@@ -585,7 +794,7 @@ export async function getUserAlbums(userId: string, includeArchived: boolean = f
   try {
     const db = await getDb();
 
-    // Build the query filter
+    // Build the query filter for user_albums collection
     const filter: Record<string, unknown> = { user_id: userId };
     if (!includeArchived) {
       filter.$or = [
@@ -594,7 +803,7 @@ export async function getUserAlbums(userId: string, includeArchived: boolean = f
       ];
     }
 
-    // First try to get albums from the user_albums collection
+    // Get albums from the user_albums collection
     const userAlbums = await db.collection('user_albums')
       .find(filter)
       .sort({ display_order: 1 })
@@ -608,28 +817,39 @@ export async function getUserAlbums(userId: string, includeArchived: boolean = f
 
     const countMap = new Map(albumCounts.map(a => [a._id, a.count]));
 
-    if (userAlbums.length > 0) {
-      return userAlbums.map(album => ({
-        ...toClientDoc(album),
-        song_count: countMap.get(album.name) || 0,
-      })) as UserAlbum[];
-    }
-
-    // Fallback: get unique albums from songs
-    const uniqueAlbums = await db.collection('songs').aggregate([
+    // Get unique album names from songs that might not be in user_albums
+    const uniqueAlbumsFromSongs = await db.collection('songs').aggregate([
       { $match: { user_id: userId, album: { $ne: null } } },
       { $group: { _id: '$album' } },
       { $sort: { _id: 1 } }
     ]).toArray();
 
-    return uniqueAlbums.map((album, index) => ({
-      _id: album._id,
-      name: album._id,
-      cover_art: null,
-      display_order: index,
-      song_count: countMap.get(album._id) || 0,
-      user_id: userId,
-    }));
+    // Build set of album names we already have from user_albums
+    const existingAlbumNames = new Set(userAlbums.map(a => a.name));
+
+    // Convert user_albums to result format
+    const result: UserAlbum[] = userAlbums.map(album => ({
+      ...toClientDoc(album),
+      song_count: countMap.get(album.name) || 0,
+    })) as UserAlbum[];
+
+    // Add any albums from songs that aren't in user_albums collection
+    let maxOrder = result.length > 0 ? Math.max(...result.map(a => a.display_order)) : -1;
+    for (const songAlbum of uniqueAlbumsFromSongs) {
+      if (!existingAlbumNames.has(songAlbum._id)) {
+        maxOrder++;
+        result.push({
+          _id: songAlbum._id, // Use album name as ID for these
+          name: songAlbum._id,
+          cover_art: null,
+          display_order: maxOrder,
+          song_count: countMap.get(songAlbum._id) || 0,
+          user_id: userId,
+        });
+      }
+    }
+
+    return result;
   } catch (error) {
     console.error('Error fetching user albums:', error);
     return [];
@@ -688,19 +908,30 @@ export async function updateUserAlbum(userId: string, albumName: string, updates
     const db = await getDb();
     const now = new Date().toISOString();
 
-    // Try to update in user_albums collection first
-    const result = await db.collection('user_albums').findOneAndUpdate(
+    // Build the update object - include name in $set if renaming
+    const setFields: Record<string, unknown> = { updated_at: now };
+    if (updates.cover_art !== undefined) setFields.cover_art = updates.cover_art;
+    if (updates.name !== undefined) setFields.name = updates.name;
+
+    // Build $setOnInsert - exclude fields that are in $set
+    const setOnInsertFields: Record<string, unknown> = {
+      user_id: userId,
+      display_order: 0,
+      created_at: now,
+    };
+    // Only add name to $setOnInsert if NOT renaming (to avoid conflict with $set)
+    if (updates.name === undefined) {
+      setOnInsertFields.name = albumName;
+    }
+
+    // Try to update in user_albums collection
+    const result = await db.collection('user_albums').updateOne(
       { user_id: userId, name: albumName },
       {
-        $set: { ...updates, updated_at: now },
-        $setOnInsert: {
-          user_id: userId,
-          name: albumName,
-          display_order: 0,
-          created_at: now,
-        }
+        $set: setFields,
+        $setOnInsert: setOnInsertFields
       },
-      { upsert: true, returnDocument: 'after' }
+      { upsert: true }
     );
 
     // If renaming the album, update all songs with that album
@@ -711,7 +942,7 @@ export async function updateUserAlbum(userId: string, albumName: string, updates
       );
     }
 
-    return !!result;
+    return result.acknowledged;
   } catch (error) {
     console.error('Error updating user album:', error);
     return false;
@@ -1124,5 +1355,347 @@ export async function createTimeSpentSegment(segment: Omit<TimeSpentSegment, '_i
   } catch (error) {
     console.error('Error creating time spent segment:', error);
     return null;
+  }
+}
+
+// ============================================
+// SHOWS & SETLIST FUNCTIONS
+// ============================================
+
+// Show Functions
+export async function getBandShows(bandId: string, month?: string): Promise<Show[]> {
+  try {
+    const db = await getDb();
+    const filter: Record<string, unknown> = { band_id: bandId };
+
+    // If month provided (format: "2024-12"), filter by that month
+    if (month) {
+      const startDate = `${month}-01`;
+      const [year, monthNum] = month.split('-').map(Number);
+      const nextMonth = monthNum === 12 ? `${year + 1}-01` : `${year}-${String(monthNum + 1).padStart(2, '0')}`;
+      const endDate = `${nextMonth}-01`;
+      filter.date = { $gte: startDate, $lt: endDate };
+    }
+
+    const docs = await db.collection('shows')
+      .find(filter)
+      .sort({ date: 1, time: 1 })
+      .toArray();
+    return docs.map(doc => toClientDoc(doc)) as Show[];
+  } catch (error) {
+    console.error('Error fetching shows:', error);
+    return [];
+  }
+}
+
+export async function getShow(showId: string): Promise<Show | null> {
+  try {
+    const db = await getDb();
+    const doc = await db.collection('shows').findOne({ _id: new ObjectId(showId) });
+    if (!doc) return null;
+    return toClientDoc(doc) as Show;
+  } catch (error) {
+    console.error('Error fetching show:', error);
+    return null;
+  }
+}
+
+export async function createShow(show: Omit<Show, '_id' | 'created_at' | 'updated_at'>): Promise<Show | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    const doc = {
+      ...show,
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await db.collection('shows').insertOne(doc);
+    return { ...doc, _id: result.insertedId.toString() } as Show;
+  } catch (error) {
+    console.error('Error creating show:', error);
+    return null;
+  }
+}
+
+export async function updateShow(showId: string, updates: Partial<Omit<Show, '_id' | 'created_at' | 'updated_at'>>): Promise<Show | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    await db.collection('shows').updateOne(
+      { _id: new ObjectId(showId) },
+      { $set: { ...updates, updated_at: now } }
+    );
+
+    const doc = await db.collection('shows').findOne({ _id: new ObjectId(showId) });
+    if (!doc) return null;
+    return toClientDoc(doc) as Show;
+  } catch (error) {
+    console.error('Error updating show:', error);
+    return null;
+  }
+}
+
+export async function deleteShow(showId: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+    // Delete associated setlist items first
+    await db.collection('setlist_items').deleteMany({ show_id: showId });
+    // Delete the show
+    const result = await db.collection('shows').deleteOne({ _id: new ObjectId(showId) });
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error('Error deleting show:', error);
+    return false;
+  }
+}
+
+// Get upcoming shows for a user (across all their bands)
+export async function getUpcomingShowsForUser(userId: string): Promise<(Show & { band_name?: string })[]> {
+  try {
+    const db = await getDb();
+    const today = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD format
+
+    // Get all bands the user owns
+    const userBands = await db.collection('bands')
+      .find({ user_id: userId })
+      .toArray();
+
+    const bandIds = userBands.map(b => b._id.toString());
+    const bandNameMap = new Map(userBands.map(b => [b._id.toString(), b.name]));
+
+    if (bandIds.length === 0) {
+      return [];
+    }
+
+    // Get upcoming shows from those bands (date >= today)
+    const shows = await db.collection('shows')
+      .find({
+        band_id: { $in: bandIds },
+        date: { $gte: today }
+      })
+      .sort({ date: 1, time: 1 })
+      .limit(10) // Limit to next 10 upcoming shows
+      .toArray();
+
+    return shows.map(doc => ({
+      ...toClientDoc(doc),
+      band_name: bandNameMap.get(doc.band_id) || 'Unknown Band',
+    })) as (Show & { band_name?: string })[];
+  } catch (error) {
+    console.error('Error fetching upcoming shows for user:', error);
+    return [];
+  }
+}
+
+// Get all shows from all bands the user is a member of for a specific month
+export async function getAllUserBandShows(userId: string, month?: string): Promise<(Show & { band_name?: string })[]> {
+  try {
+    const db = await getDb();
+
+    // Get all bands the user owns
+    const userBands = await db.collection('bands')
+      .find({ user_id: userId })
+      .toArray();
+
+    const bandIds = userBands.map(b => b._id.toString());
+    const bandNameMap = new Map(userBands.map(b => [b._id.toString(), b.name]));
+
+    if (bandIds.length === 0) {
+      return [];
+    }
+
+    // Build filter
+    const filter: Record<string, unknown> = { band_id: { $in: bandIds } };
+
+    // If month provided (format: "2024-12"), filter by that month
+    if (month) {
+      const startDate = `${month}-01`;
+      const [year, monthNum] = month.split('-').map(Number);
+      const nextMonth = monthNum === 12 ? `${year + 1}-01` : `${year}-${String(monthNum + 1).padStart(2, '0')}`;
+      const endDate = `${nextMonth}-01`;
+      filter.date = { $gte: startDate, $lt: endDate };
+    }
+
+    const shows = await db.collection('shows')
+      .find(filter)
+      .sort({ date: 1, time: 1 })
+      .toArray();
+
+    return shows.map(doc => ({
+      ...toClientDoc(doc),
+      band_name: bandNameMap.get(doc.band_id) || 'Unknown Band',
+    })) as (Show & { band_name?: string })[];
+  } catch (error) {
+    console.error('Error fetching all user band shows:', error);
+    return [];
+  }
+}
+
+// Setlist Item Functions
+export async function getSetlistItems(showId: string): Promise<SetlistItem[]> {
+  try {
+    const db = await getDb();
+    const docs = await db.collection('setlist_items')
+      .find({ show_id: showId })
+      .sort({ display_order: 1 })
+      .toArray();
+    return docs.map(doc => toClientDoc(doc)) as SetlistItem[];
+  } catch (error) {
+    console.error('Error fetching setlist items:', error);
+    return [];
+  }
+}
+
+export async function addSetlistItem(item: Omit<SetlistItem, '_id' | 'created_at' | 'updated_at' | 'display_order'>): Promise<SetlistItem | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    // Get max display_order for this show
+    const maxOrderDoc = await db.collection('setlist_items')
+      .find({ show_id: item.show_id })
+      .sort({ display_order: -1 })
+      .limit(1)
+      .toArray();
+    const maxOrder = maxOrderDoc.length > 0 ? (maxOrderDoc[0].display_order || 0) : -1;
+
+    const doc = {
+      ...item,
+      display_order: maxOrder + 1,
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await db.collection('setlist_items').insertOne(doc);
+    return { ...doc, _id: result.insertedId.toString() } as SetlistItem;
+  } catch (error) {
+    console.error('Error adding setlist item:', error);
+    return null;
+  }
+}
+
+export async function updateSetlistItem(itemId: string, updates: Partial<Pick<SetlistItem, 'custom_text' | 'custom_title'>>): Promise<SetlistItem | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    await db.collection('setlist_items').updateOne(
+      { _id: new ObjectId(itemId) },
+      { $set: { ...updates, updated_at: now } }
+    );
+
+    const doc = await db.collection('setlist_items').findOne({ _id: new ObjectId(itemId) });
+    if (!doc) return null;
+    return toClientDoc(doc) as SetlistItem;
+  } catch (error) {
+    console.error('Error updating setlist item:', error);
+    return null;
+  }
+}
+
+export async function deleteSetlistItem(itemId: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const result = await db.collection('setlist_items').deleteOne({ _id: new ObjectId(itemId) });
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error('Error deleting setlist item:', error);
+    return false;
+  }
+}
+
+export async function reorderSetlistItems(showId: string, itemIds: string[]): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    const bulkOps = itemIds.map((id, index) => ({
+      updateOne: {
+        filter: { _id: new ObjectId(id), show_id: showId },
+        update: { $set: { display_order: index, updated_at: now } }
+      }
+    }));
+
+    await db.collection('setlist_items').bulkWrite(bulkOps);
+    return true;
+  } catch (error) {
+    console.error('Error reordering setlist items:', error);
+    return false;
+  }
+}
+
+// Artifact Template Functions
+export async function getArtifactTemplates(bandId: string): Promise<ArtifactTemplate[]> {
+  try {
+    const db = await getDb();
+    const docs = await db.collection('artifact_templates')
+      .find({ band_id: bandId })
+      .sort({ name: 1 })
+      .toArray();
+    return docs.map(doc => toClientDoc(doc)) as ArtifactTemplate[];
+  } catch (error) {
+    console.error('Error fetching artifact templates:', error);
+    return [];
+  }
+}
+
+export async function createArtifactTemplate(template: Omit<ArtifactTemplate, '_id' | 'created_at' | 'updated_at'>): Promise<ArtifactTemplate | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+    const doc = {
+      ...template,
+      created_at: now,
+      updated_at: now,
+    };
+    const result = await db.collection('artifact_templates').insertOne(doc);
+    return { ...doc, _id: result.insertedId.toString() } as ArtifactTemplate;
+  } catch (error) {
+    console.error('Error creating artifact template:', error);
+    return null;
+  }
+}
+
+export async function updateArtifactTemplate(templateId: string, updates: Partial<Omit<ArtifactTemplate, '_id' | 'created_at' | 'updated_at'>>): Promise<ArtifactTemplate | null> {
+  try {
+    const db = await getDb();
+    const now = new Date().toISOString();
+
+    await db.collection('artifact_templates').updateOne(
+      { _id: new ObjectId(templateId) },
+      { $set: { ...updates, updated_at: now } }
+    );
+
+    const doc = await db.collection('artifact_templates').findOne({ _id: new ObjectId(templateId) });
+    if (!doc) return null;
+    return toClientDoc(doc) as ArtifactTemplate;
+  } catch (error) {
+    console.error('Error updating artifact template:', error);
+    return null;
+  }
+}
+
+export async function deleteArtifactTemplate(templateId: string): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const result = await db.collection('artifact_templates').deleteOne({ _id: new ObjectId(templateId) });
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error('Error deleting artifact template:', error);
+    return false;
+  }
+}
+
+// Create default artifact templates for a band
+export async function createDefaultArtifactTemplates(bandId: string): Promise<void> {
+  const defaults = [
+    { name: 'Intro', default_text: 'Welcome everyone! Tonight we have a great show planned...', color: '#10b981' },
+    { name: 'Song Intro', default_text: 'This next song is...', color: '#3b82f6' },
+    { name: 'Break', default_text: 'We\'re going to take a short break. We\'ll be back in a few minutes!', color: '#f59e0b' },
+    { name: 'Outro', default_text: 'Thank you all for coming out tonight! We\'ve been [Band Name], goodnight!', color: '#8b5cf6' },
+  ];
+
+  for (const template of defaults) {
+    await createArtifactTemplate({ band_id: bandId, ...template });
   }
 }

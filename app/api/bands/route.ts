@@ -1,19 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { createBand, getDb } from '@/lib/mongodb';
+import { createBand, getDb, GroupContentType } from '@/lib/mongodb';
 import { getUserBands as getUserBandsWithMembership, addBandMember, isBandOwner } from '@/lib/social';
 import { ObjectId } from 'mongodb';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get optional content_type filter from query params
+    const searchParams = request.nextUrl.searchParams;
+    const contentType = searchParams.get('content_type') || undefined;
+
     // Get bands where user is a member (includes owned bands and shared bands)
-    const bands = await getUserBandsWithMembership(session.user.id);
+    const bands = await getUserBandsWithMembership(session.user.id, contentType);
     return NextResponse.json(bands);
   } catch (error) {
     console.error('Error fetching bands:', error);
@@ -28,14 +32,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { name } = await request.json();
+    const { name, content_type } = await request.json();
     if (!name?.trim()) {
-      return NextResponse.json({ error: 'Band name is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    const band = await createBand(session.user.id, name.trim());
+    // Validate content_type
+    const validContentTypes: GroupContentType[] = ['band', 'production', 'podcast', 'organization'];
+    const groupType: GroupContentType = validContentTypes.includes(content_type) ? content_type : 'band';
+
+    const band = await createBand(session.user.id, name.trim(), groupType);
     if (!band) {
-      return NextResponse.json({ error: 'Failed to create band' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to create' }, { status: 500 });
     }
 
     // Add creator as owner in band_members
