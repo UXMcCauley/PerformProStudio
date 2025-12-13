@@ -633,11 +633,8 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewShows }: Pr
     );
   }
 
-  // Mobile sidebar toggle
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-
   return (
-    <div className="p-2 sm:p-4 md:p-6 h-full flex flex-col">
+    <div className="p-4 md:p-6 h-full flex flex-col">
       {/* Hidden file input for album art */}
       <input
         ref={fileInputRef}
@@ -788,162 +785,36 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewShows }: Pr
       )}
 
       {/* Header */}
-      <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-base-content">Library</h1>
-          <div className="flex items-center gap-2">
-            {/* Mobile sidebar toggle */}
-            <button
-              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-              className="btn btn-ghost btn-sm lg:hidden"
-              title="Shows & Albums"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
-              </svg>
-              <span className="hidden sm:inline">More</span>
-            </button>
-            <button onClick={onNewSong} className="btn btn-primary btn-sm">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="hidden sm:inline">New Song</span>
-            </button>
-          </div>
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl md:text-3xl font-bold text-base-content">Library</h1>
+          <button onClick={onNewSong} className="btn btn-primary btn-sm">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            New Song
+          </button>
         </div>
 
-        {/* Search and filter row */}
-        <div className="flex gap-2 items-center">
-          <div className="relative flex-1 max-w-md">
-            <input
-              type="text"
-              placeholder="Search songs..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="input input-bordered input-sm sm:input-md w-full pl-9 sm:pl-10"
-            />
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
-            </svg>
-          </div>
-          {/* Mobile album filter chips */}
-          {selectedAlbumName && (
-            <button
-              onClick={() => setSelectedAlbumName(null)}
-              className="btn btn-sm btn-ghost gap-1 text-primary lg:hidden"
-            >
-              {selectedAlbumName}
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+        {/* Search */}
+        <div className="relative max-w-md">
+          <input
+            type="text"
+            placeholder="Search songs, artists, albums..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="input input-bordered w-full pl-10"
+          />
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35" />
+          </svg>
         </div>
       </div>
 
-      {/* Mobile Sidebar Drawer */}
-      {showMobileSidebar && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileSidebar(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-base-100 shadow-2xl overflow-y-auto">
-            <div className="sticky top-0 bg-base-100 border-b border-base-300 p-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold">Shows & Albums</h2>
-              <button onClick={() => setShowMobileSidebar(false)} className="btn btn-ghost btn-sm btn-circle">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4">
-              {/* Mobile Shows Section */}
-              {upcomingShows.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-base-content/70 mb-3">Upcoming Shows</h3>
-                  <div className="space-y-2">
-                    {upcomingShows.slice(0, 3).map(show => {
-                      const showDate = new Date(show.date + 'T00:00:00');
-                      return (
-                        <div
-                          key={show._id}
-                          onClick={() => { onViewShows?.(); setShowMobileSidebar(false); }}
-                          className="flex items-center gap-3 p-2 rounded-lg bg-primary/10 active:bg-primary/20"
-                        >
-                          <div className="w-10 h-10 rounded-lg bg-primary/20 flex flex-col items-center justify-center">
-                            <span className="text-[10px] font-bold text-primary">{showDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</span>
-                            <span className="text-sm font-bold text-primary leading-none">{showDate.getDate()}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{show.name}</p>
-                            <p className="text-xs text-base-content/60 truncate">{show.band_name}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {onViewShows && (
-                    <button onClick={() => { onViewShows(); setShowMobileSidebar(false); }} className="btn btn-ghost btn-sm btn-block mt-2">
-                      View All Shows
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Mobile Albums Section */}
-              <div>
-                <h3 className="text-sm font-semibold text-base-content/70 mb-3">Albums</h3>
-                <div className="space-y-2">
-                  <button
-                    onClick={() => { setSelectedAlbumName(null); setShowMobileSidebar(false); }}
-                    className={`w-full flex items-center gap-3 p-2 rounded-lg ${
-                      selectedAlbumName === null ? 'bg-primary/20' : 'active:bg-base-200'
-                    }`}
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-base-200 to-base-300 flex items-center justify-center">
-                      <svg className="w-5 h-5 text-base-content/50" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className="font-medium text-sm">All Songs</p>
-                      <p className="text-xs text-base-content/60">{songs.length} songs</p>
-                    </div>
-                  </button>
-                  {albums.map(album => (
-                    <button
-                      key={album._id}
-                      onClick={() => { setSelectedAlbumName(album.name); setShowMobileSidebar(false); }}
-                      className={`w-full flex items-center gap-3 p-2 rounded-lg ${
-                        selectedAlbumName === album.name ? 'bg-primary/20' : 'active:bg-base-200'
-                      }`}
-                    >
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-base-300">
-                        {album.cover_art ? (
-                          <img src={album.cover_art} alt={album.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-white/50" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 text-left min-w-0">
-                        <p className="font-medium text-sm truncate">{album.name}</p>
-                        <p className="text-xs text-base-content/60">{album.song_count} songs</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main layout - Songs only on mobile, two columns on desktop */}
+      {/* Two-column layout */}
       <div className="flex-1 flex gap-6 min-h-0">
-        {/* Songs Grid */}
+        {/* Left: Songs Grid */}
         <div className="flex-1 overflow-y-auto">
           {filteredSongs.length === 0 ? (
             <div className="text-center py-16">
@@ -960,7 +831,7 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewShows }: Pr
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredSongs.map(song => (
                 <div
                   key={song._id}
@@ -1019,10 +890,10 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewShows }: Pr
                       </svg>
                     </div>
                   </div>
-                  <h3 className="font-medium text-base-content text-xs sm:text-sm truncate">{song.title}</h3>
-                  <p className="text-[10px] sm:text-xs text-base-content/60 truncate">{song.artist}</p>
+                  <h3 className="font-medium text-base-content text-sm truncate">{song.title}</h3>
+                  <p className="text-xs text-base-content/60 truncate">{song.artist}</p>
                   {song.album && (
-                    <p className="text-[10px] sm:text-xs text-base-content/40 truncate hidden sm:block">{song.album}</p>
+                    <p className="text-xs text-base-content/40 truncate">{song.album}</p>
                   )}
                 </div>
               ))}
@@ -1030,8 +901,8 @@ export default function SongLibrary({ onSelectSong, onNewSong, onViewShows }: Pr
           )}
         </div>
 
-        {/* Right: Shows & Albums Column - Hidden on mobile */}
-        <div className="hidden lg:flex w-72 flex-shrink-0 flex-col border-l border-base-300 pl-6">
+        {/* Right: Shows & Albums Column */}
+        <div className="w-72 flex-shrink-0 flex flex-col border-l border-base-300 pl-6">
           {/* Upcoming Shows Section */}
           {upcomingShows.length > 0 && (
             <div className="mb-6">
