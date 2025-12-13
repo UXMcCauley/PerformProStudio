@@ -543,6 +543,97 @@ export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToLis
         onChange={handleFileSelect}
       />
 
+      {/* Delete Confirmation Modal */}
+      {deleteModalAlbum && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-base-100 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-base-content mb-2">Delete Album</h3>
+            <p className="text-base-content/70 mb-4">
+              Are you sure you want to delete "{deleteModalAlbum.name}"? The album will be moved to archives where you can restore or permanently delete it.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteModalAlbum(null)}
+                className="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleArchiveAlbum(deleteModalAlbum)}
+                className="btn btn-error"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permanent Delete Confirmation Modal */}
+      {permanentDeleteAlbum && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-base-100 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-error mb-2">Permanently Delete Album</h3>
+            <p className="text-base-content/70 mb-4">
+              This action cannot be undone. "{permanentDeleteAlbum.name}" and all its songs will be permanently removed.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setPermanentDeleteAlbum(null)}
+                className="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handlePermanentDeleteAlbum(permanentDeleteAlbum)}
+                className="btn btn-error"
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Album Details Modal */}
+      {editDetailsAlbum && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-base-100 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-base-content mb-4">Edit Album Details</h3>
+            <div className="form-control mb-4">
+              <label className="label">
+                <span className="label-text">Album Name</span>
+              </label>
+              <input
+                type="text"
+                value={editAlbumName}
+                onChange={(e) => setEditAlbumName(e.target.value)}
+                className="input input-bordered w-full"
+                placeholder="Enter album name"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setEditDetailsAlbum(null);
+                  setEditAlbumName('');
+                }}
+                className="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateAlbumDetails}
+                className="btn btn-primary"
+                disabled={!editAlbumName.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
@@ -557,75 +648,223 @@ export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToLis
               Songs
             </button>
           )}
-          <h2 className="text-xl md:text-2xl font-bold text-base-content">Albums</h2>
+          <h2 className="text-xl md:text-2xl font-bold text-base-content">
+            {showArchives ? 'Archived Albums' : 'Albums'}
+          </h2>
         </div>
-        <button
-          onClick={() => setReorderMode(!reorderMode)}
-          className={`btn btn-ghost btn-sm ${reorderMode ? 'text-primary' : ''}`}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-          </svg>
-          {reorderMode ? 'Done' : 'Reorder'}
-        </button>
+        <div className="flex items-center gap-2">
+          {!showArchives && (
+            <button
+              onClick={() => setReorderMode(!reorderMode)}
+              className={`btn btn-ghost btn-sm ${reorderMode ? 'text-primary' : ''}`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+              </svg>
+              {reorderMode ? 'Done' : 'Reorder'}
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setShowArchives(!showArchives);
+              if (!showArchives) {
+                loadArchivedAlbums();
+              }
+              setReorderMode(false);
+            }}
+            className={`btn btn-ghost btn-sm ${showArchives ? 'text-primary' : ''}`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            {showArchives ? 'Albums' : 'Archives'}
+          </button>
+        </div>
       </div>
 
-      {albums.length === 0 ? (
-        <div className="text-center py-12 text-base-content/60">
-          <svg className="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-          </svg>
-          <p>No albums yet. Add songs to albums to see them here.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {albums.map((album, index) => (
-            <div
-              key={album._id}
-              draggable={reorderMode}
-              onDragStart={(e) => handleDragStart(e, index)}
-              onDragOver={(e) => handleDragOver(e, index)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, index)}
-              onDragEnd={handleDragEnd}
-              onClick={() => handleAlbumClick(album)}
-              className={`group cursor-pointer transition-all ${
-                reorderMode ? 'cursor-grab active:cursor-grabbing' : ''
-              } ${draggedIndex === index ? 'opacity-50' : ''} ${
-                dragOverIndex === index ? 'scale-105 ring-2 ring-primary' : ''
-              }`}
-            >
-              <div className="aspect-square rounded-lg bg-base-200 overflow-hidden relative mb-2 shadow-md group-hover:shadow-lg transition-shadow">
-                {album.cover_art ? (
-                  <img
-                    src={album.cover_art}
-                    alt={album.name}
-                    className="w-full h-full object-cover"
-                    draggable={false}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-200 to-base-300">
-                    <svg className="w-1/3 h-1/3 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
-                    </svg>
+      {/* Archives View */}
+      {showArchives ? (
+        archivedAlbums.length === 0 ? (
+          <div className="text-center py-12 text-base-content/60">
+            <svg className="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            </svg>
+            <p>No archived albums</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {archivedAlbums.map((album) => (
+              <div key={album._id} className="group">
+                <div className="aspect-square rounded-lg bg-base-200 overflow-hidden relative mb-2 shadow-md opacity-60">
+                  {album.cover_art ? (
+                    <img
+                      src={album.cover_art}
+                      alt={album.name}
+                      className="w-full h-full object-cover grayscale"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-200 to-base-300">
+                      <svg className="w-1/3 h-1/3 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                      </svg>
+                    </div>
+                  )}
+                  {/* Archive overlay with actions */}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleRestoreAlbum(album)}
+                      className="btn btn-sm btn-success"
+                      title="Restore album"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setPermanentDeleteAlbum(album)}
+                      className="btn btn-sm btn-error"
+                      title="Delete permanently"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
-                )}
-
-                {/* Reorder handle */}
-                {reorderMode && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
-                    </svg>
-                  </div>
-                )}
+                </div>
+                <h3 className="font-medium text-base-content/60 text-sm md:text-base truncate">{album.name}</h3>
+                <p className="text-xs text-base-content/40">{album.song_count} songs</p>
               </div>
+            ))}
+          </div>
+        )
+      ) : (
+        /* Normal Albums View */
+        albums.length === 0 ? (
+          <div className="text-center py-12 text-base-content/60">
+            <svg className="w-16 h-16 mx-auto mb-4 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+            </svg>
+            <p>No albums yet. Add songs to albums to see them here.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {albums.map((album, index) => (
+              <div
+                key={album._id}
+                draggable={reorderMode}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onClick={() => handleAlbumClick(album)}
+                className={`group cursor-pointer transition-all ${
+                  reorderMode ? 'cursor-grab active:cursor-grabbing' : ''
+                } ${draggedIndex === index ? 'opacity-50' : ''} ${
+                  dragOverIndex === index ? 'scale-105 ring-2 ring-primary' : ''
+                }`}
+              >
+                <div className="aspect-square rounded-lg bg-base-200 overflow-hidden relative mb-2 shadow-md group-hover:shadow-lg transition-shadow">
+                  {album.cover_art ? (
+                    <img
+                      src={album.cover_art}
+                      alt={album.name}
+                      className="w-full h-full object-cover"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-200 to-base-300">
+                      <svg className="w-1/3 h-1/3 text-base-content/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
+                      </svg>
+                    </div>
+                  )}
 
-              <h3 className="font-medium text-base-content text-sm md:text-base truncate">{album.name}</h3>
-              <p className="text-xs text-base-content/60">{album.song_count} songs</p>
-            </div>
-          ))}
-        </div>
+                  {/* Reorder handle */}
+                  {reorderMode && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                      </svg>
+                    </div>
+                  )}
+
+                  {/* Three-dots menu button */}
+                  {!reorderMode && (
+                    <div
+                      ref={showAlbumMenu === album._id ? menuRef : null}
+                      className="absolute bottom-2 right-2"
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowAlbumMenu(showAlbumMenu === album._id ? null : album._id);
+                        }}
+                        className="w-8 h-8 bg-black/60 hover:bg-black/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="12" cy="6" r="1.5" />
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="12" cy="18" r="1.5" />
+                        </svg>
+                      </button>
+
+                      {/* Dropdown menu */}
+                      {showAlbumMenu === album._id && (
+                        <div className="absolute bottom-10 right-0 w-48 bg-base-100 rounded-lg shadow-xl border border-base-300 z-50">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditDetailsAlbum(album);
+                              setEditAlbumName(album.name);
+                              setShowAlbumMenu(null);
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-base-200 rounded-t-lg flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            Edit Album Details
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingAlbumArt(album.name);
+                              fileInputRef.current?.click();
+                              setShowAlbumMenu(null);
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-base-200 flex items-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Update Album Cover
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteModalAlbum(album);
+                              setShowAlbumMenu(null);
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-base-200 rounded-b-lg flex items-center gap-2 text-error"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete Album
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <h3 className="font-medium text-base-content text-sm md:text-base truncate">{album.name}</h3>
+                <p className="text-xs text-base-content/60">{album.song_count} songs</p>
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
