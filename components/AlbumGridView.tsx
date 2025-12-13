@@ -116,6 +116,104 @@ export default function AlbumGridView({ onSelectAlbum, onSelectSong, onBackToLis
     setLoadingSongs(false);
   };
 
+  const loadArchivedAlbums = async () => {
+    try {
+      const response = await fetch('/api/user-albums?archived=true');
+      if (response.ok) {
+        const data = await response.json();
+        setArchivedAlbums(data || []);
+      }
+    } catch (error) {
+      console.error('Error loading archived albums:', error);
+    }
+  };
+
+  const handleArchiveAlbum = async (album: UserAlbum) => {
+    try {
+      const response = await fetch(`/api/user-albums?albumName=${encodeURIComponent(album.name)}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setAlbums(prev => prev.filter(a => a._id !== album._id));
+        setDeleteModalAlbum(null);
+        // Reload archived albums if showing
+        if (showArchives) {
+          await loadArchivedAlbums();
+        }
+      }
+    } catch (error) {
+      console.error('Error archiving album:', error);
+    }
+  };
+
+  const handleRestoreAlbum = async (album: UserAlbum) => {
+    try {
+      const response = await fetch(`/api/user-albums?albumName=${encodeURIComponent(album.name)}&action=restore`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setArchivedAlbums(prev => prev.filter(a => a._id !== album._id));
+        await loadAlbums();
+      }
+    } catch (error) {
+      console.error('Error restoring album:', error);
+    }
+  };
+
+  const handlePermanentDeleteAlbum = async (album: UserAlbum) => {
+    try {
+      const response = await fetch(`/api/user-albums?albumName=${encodeURIComponent(album.name)}&permanent=true`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setArchivedAlbums(prev => prev.filter(a => a._id !== album._id));
+        setPermanentDeleteAlbum(null);
+      }
+    } catch (error) {
+      console.error('Error permanently deleting album:', error);
+    }
+  };
+
+  const handleUpdateAlbumDetails = async () => {
+    if (!editDetailsAlbum || !editAlbumName.trim()) return;
+
+    try {
+      const response = await fetch('/api/user-albums', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          albumName: editDetailsAlbum.name,
+          name: editAlbumName.trim(),
+        }),
+      });
+
+      if (response.ok) {
+        await loadAlbums();
+        setEditDetailsAlbum(null);
+        setEditAlbumName('');
+      }
+    } catch (error) {
+      console.error('Error updating album details:', error);
+    }
+  };
+
+  const handleDeleteSong = async (e: React.MouseEvent, song: Song) => {
+    e.stopPropagation();
+    if (!confirm(`Delete "${song.title}"? This will also delete all associated lyrics and cannot be undone.`)) {
+      return;
+    }
+    try {
+      const response = await fetch(`/api/songs?id=${song._id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setAlbumSongs(prev => prev.filter(s => s._id !== song._id));
+      }
+    } catch (error) {
+      console.error('Error deleting song:', error);
+    }
+  };
+
   const handleAlbumClick = async (album: UserAlbum) => {
     if (reorderMode) return;
     setSelectedAlbum(album);
